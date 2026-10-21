@@ -13,6 +13,7 @@ class AuthService:
         self._repo = repo
 
     async def get_user(self, email: str):
+        email = email.lower().strip()
         user = await self._repo.get_by_email(email)
         return user
 
@@ -26,7 +27,7 @@ class AuthService:
 
     async def register(self, email: str, password: str) -> User:
         user = User(
-            email=email,
+            email=email.lower().strip(),
             hashed_password=get_password_hash(password),
         )
         await self._repo.add(user)
