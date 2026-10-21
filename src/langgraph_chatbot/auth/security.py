@@ -1,10 +1,7 @@
-from datetime import datetime, timedelta
-from time import timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from pwdlib import PasswordHash
-
-from langgraph_chatbot.schemas.user import User
 
 password_hash = PasswordHash.recommended()
 
@@ -20,19 +17,20 @@ def get_password_hash(password):
 def create_access_token(
     data: dict,
     secret_key: str,
-    algorithm,
+    algorithm: str,
     expires_delta: timedelta | None = None,
 ):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+        expire = datetime.now(UTC) + timedelta(minutes=15)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, secret_key, algorithm)
     return encoded_jwt
 
 
-def decode_access_token(token):
-    return User(email="example@d.com", username=token + "temp")
+def decode_access_token(token, secret_key: str, algorithm: str):
+    payload = jwt.decode(token, secret_key, algorithms=[algorithm])
+    return payload
