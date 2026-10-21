@@ -9,7 +9,7 @@ from langgraph_chatbot.deps import AuthServiceDep, CurrentUser, SettingsDep
 from langgraph_chatbot.schemas.user import UserCreate, UserRead
 from langgraph_chatbot.users.repository import EmailAlreadyExists
 
-router = APIRouter(prefix="auth/")
+router = APIRouter(prefix="/auth")
 
 
 @router.post("/token")
@@ -37,7 +37,7 @@ async def login(
     return {"access_token": encoded_jwt, "token_type": "bearer"}
 
 
-@router.get("/users/me")
+@router.get("/users/me", response_model=UserRead)
 async def read_users_me(current_user: CurrentUser):
     return current_user
 
@@ -45,9 +45,11 @@ async def read_users_me(current_user: CurrentUser):
 @router.post("/register", response_model=UserRead, status_code=201)
 async def register(data: UserCreate, auth_service: AuthServiceDep):
     try:
-        email = data.email.lower().strip()
-        user = await auth_service.register(email, data.password)
+        user = await auth_service.register(data.email, data.password)
         response = UserRead.model_validate(user)
         return response
     except EmailAlreadyExists:
-        return HTTPException(status_code=409)
+        raise HTTPException(
+            status_code=409,
+            detail="Email already registered",
+        )
