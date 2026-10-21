@@ -14,7 +14,7 @@ from langgraph_chatbot.models.user import User
 from langgraph_chatbot.schemas.user import UserRead
 from langgraph_chatbot.users.repository import UserRepository
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 
 def get_user_repo(session: SessionDep) -> UserRepository:
