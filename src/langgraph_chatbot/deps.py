@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from langgraph_chatbot.auth.security import decode_access_token
 from langgraph_chatbot.auth.service import AuthService
 from langgraph_chatbot.config import Settings, get_settings
+from langgraph_chatbot.models.user import User
 from langgraph_chatbot.schemas.user import UserRead
 from langgraph_chatbot.users.repository import UserRepository
 
@@ -30,7 +32,7 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-    auth_service: AuthServiceDep,
+    user_repo: UserRepoDep,
     settings: SettingsDep,
 ):
     credentials_exception = HTTPException(
@@ -45,11 +47,12 @@ async def get_current_user(
             settings.jwt_secret,
             settings.jwt_algorithm,
         )
-    except InvalidTokenError:
+        user_id = UUID(payload["sub"])
+    except InvalidTokenError, KeyError, ValueError:
         raise credentials_exception
 
-    user = auth_service.get_user(payload.id)
-    if user is None:
+    user = await user_repo.get_by_id(user_id)
+    if user is None or not user.is_active:
         raise credentials_exception
     return user
 
@@ -63,7 +66,7 @@ async def get_current_active_user(
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-CurrentUser = Annotated[UserRead, Depends(get_current_user)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repo)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,8 +7,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from langgraph_chatbot.auth.security import create_access_token
 from langgraph_chatbot.deps import AuthServiceDep, CurrentUser, SettingsDep
 from langgraph_chatbot.schemas.user import UserCreate, UserRead
+from langgraph_chatbot.users.repository import EmailAlreadyExists
 
-router = APIRouter(prefix="users")
+router = APIRouter(prefix="auth/")
 
 
 @router.post("/token")
@@ -25,7 +27,12 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    encoded_jwt = create_access_token(user, settings.jwt_secret, settings.jwt_algorithm)
+    encoded_jwt = create_access_token(
+        {"sub": str(user.id)},
+        settings.jwt_secret,
+        settings.jwt_algorithm,
+        expires_delta=timedelta(minutes=settings.access_token_ttl_minutes),
+    )
 
     return {"access_token": encoded_jwt, "token_type": "bearer"}
 
@@ -36,5 +43,11 @@ async def read_users_me(current_user: CurrentUser):
 
 
 @router.post("/register", response_model=UserRead, status_code=201)
-async def register(data: UserCreate, service: AuthServiceDep):
-    pass
+async def register(data: UserCreate, auth_service: AuthServiceDep):
+    try:
+        email = data.email.lower().strip()
+        user = await auth_service.register(email, data.password)
+        response = UserRead.model_validate(user)
+        return response
+    except EmailAlreadyExists:
+        return HTTPException(status_code=409)
