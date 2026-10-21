@@ -4,18 +4,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from langgraph_chatbot.auth.security import create_access_token
-from langgraph_chatbot.auth.service import authenticate_user
-from langgraph_chatbot.config import get_settings
-from langgraph_chatbot.deps import get_current_active_user
-from langgraph_chatbot.schemas.user import UserRead
+from langgraph_chatbot.deps import AuthServiceDep, CurrentUser, SettingsDep
+from langgraph_chatbot.schemas.user import UserCreate, UserRead
 
 router = APIRouter(prefix="users")
 
 
 @router.post("/token")
-async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
-    user = await authenticate_user("fake_db", form_data.username, form_data.password)
-    settings = get_settings()
+async def login(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    auth_service: AuthServiceDep,
+    settings: SettingsDep,
+):
+    user = await auth_service.authenticate_user(form_data.username, form_data.password)
 
     if not user:
         raise HTTPException(
@@ -30,7 +31,10 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
 
 
 @router.get("/users/me")
-async def read_users_me(
-    current_user: Annotated[UserRead, Depends[get_current_active_user]],
-):
+async def read_users_me(current_user: CurrentUser):
     return current_user
+
+
+@router.post("/register", response_model=UserRead, status_code=201)
+async def register(data: UserCreate, service: AuthServiceDep):
+    pass
