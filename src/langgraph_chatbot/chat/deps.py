@@ -11,8 +11,9 @@ def get_chat_repo(session: SessionDep) -> ChatRepository:
     return ChatRepository(session)
 
 
-def get_chat_service(session: SessionDep, chats: ChatRepository) -> ChatService:
+def get_chat_service(session: SessionDep, chats: ChatRepoDep) -> ChatService:
     return ChatService(session, chats)
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
+ChatRepoDep = Annotated[ChatRepository, Depends(get_chat_repo)]
