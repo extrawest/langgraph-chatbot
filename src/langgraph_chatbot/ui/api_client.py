@@ -4,6 +4,8 @@ The UI knows nothing about the database or JWT internals - only about the HTTP
 contract. Swapping the UI (or testing it) means swapping this one class.
 """
 
+import json
+
 import httpx
 
 
@@ -37,18 +39,24 @@ class ApiClient:
     def __init__(self, base_url: str, timeout: float = 10.0) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self._base_url,
+                timeout=httpx.Timeout(self._timeout, read=60.0),
+                follow_redirects=True,
+            )
+        return self._client
 
     async def _request(
         self, method: str, path: str, *, token: str | None = None, **kwargs
     ):
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         try:
-            async with httpx.AsyncClient(
-                base_url=self._base_url,
-                timeout=self._timeout,
-                follow_redirects=True,
-            ) as client:
-                response = await client.request(method, path, headers=headers, **kwargs)
+            client = self._get_client()
+            response = await client.request(method, path, headers=headers, **kwargs)
         except httpx.RequestError as exc:
             raise ApiError(0, f"Backend is unreachable ({self._base_url})") from exc
 
@@ -59,13 +67,13 @@ class ApiClient:
     # --- auth ---------------------------------------------------------------
     async def register(self, email: str, password: str) -> None:
         await self._request(
-            "POST", "/auth/register", json={"username": email, "password": password}
+            "POST", "/auth/register", json={"email": email, "password": password}
         )
 
     async def login(self, email: str, password: str) -> str:
         # OAuth2 Password Flow: form-data, and the field is called "username"
         data = await self._request(
-            "POST", "/auth/token", data={"email": email, "password": password}
+            "POST", "/auth/token", data={"username": email, "password": password}
         )
         return data["access_token"]
 
@@ -86,3 +94,30 @@ class ApiClient:
 
     async def delete_chat(self, token: str, chat_id: str) -> None:
         await self._request("DELETE", f"/chats/{chat_id}", token=token)
+
+    async def stream_message(
+        self, message: str, chat_id: str | None, *, token: str | None = None
+    ):
+        """Yield (event_name, data) pairs from the SSE stream of POST /chats/messages."""
+        client = self._get_client()
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        body = {"message": message, "chat_id": chat_id}
+
+        try:
+            async with client.stream(
+                "POST", "/chats/messages", headers=headers, json=body
+            ) as response:
+                if response.is_error:
+                    await response.aread()  # in stream mode the body is not read yet
+                    raise ApiError(response.status_code, _extract_detail(response))
+
+                event_name = None
+                async for line in response.aiter_lines():
+                    if line.startswith("event:"):
+                        event_name = line.removeprefix("event:").strip()
+                    elif line.startswith("data:"):
+                        yield event_name, json.loads(line.removeprefix("data:").strip())
+                    elif not line:
+                        event_name = None  # blank line = end of the event
+        except httpx.RequestError as exc:
+            raise ApiError(0, f"Backend is unreachable ({self._base_url})") from exc

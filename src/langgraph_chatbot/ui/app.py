@@ -8,7 +8,6 @@ reply is a placeholder echo - replace `on_send` internals with the streaming
 LangGraph endpoint later.
 """
 
-import asyncio
 import inspect
 import os
 
@@ -154,14 +153,14 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                 *_sidebar([], None, {}),
             )
 
-        async def on_new_chat(access_token: str, hist: dict):
-            try:
-                chat = await api.create_chat(access_token, DEFAULT_CHAT_TITLE)
-                chats = await api.list_chats(access_token)
-            except ApiError as exc:
-                gr.Warning(exc.detail)
-                return _noops(5)
-            return _sidebar(chats, chat["id"], hist)
+        async def on_new_chat(access_token: str, chats: list[dict], hist: dict):
+            # try:
+            #     chat = await api.create_chat(access_token, DEFAULT_CHAT_TITLE)
+            #     chats = await api.list_chats(access_token)
+            # except ApiError as exc:
+            #     gr.Warning(exc.detail)
+            #     return _noops(5)
+            return _sidebar(chats, None, hist)
 
         def on_select(chat_id: str | None, chats: list[dict], hist: dict):
             return _sidebar(chats, chat_id, hist)
@@ -194,26 +193,49 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
             hist = {k: v for k, v in hist.items() if k != chat_id}
             return (*_sidebar(chats, None, hist), hist)
 
-        async def on_send(message: str, history: list, chat_id: str | None, hist: dict):
+        async def on_send(
+            access_token, message: str, history: list, chat_id: str | None, hist: dict
+        ):
             message = (message or "").strip()
             if not message:
                 return
-            if not chat_id:
-                gr.Warning("Create or pick a chat first")
+
+            history = [
+                *history,
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": ""},
+            ]
+            yield history, "", chat_id, hist
+
+            try:
+                async for event_name, data in api.stream_message(
+                    message, chat_id, token=access_token
+                ):
+                    if event_name == "chat":
+                        chat_id = data["chat_id"]
+                    elif event_name == "token":
+                        history[-1]["content"] += data["text"]
+                        yield history, "", chat_id, hist
+                    elif event_name == "tool":
+                        gr.Info(f"🔎 {data['name']}: {data['status']}")
+                    elif event_name == "error":
+                        history[-1]["content"] += f"\n\n⚠️ {data['detail']}"
+                        yield history, "", chat_id, hist
+                    elif event_name == "done":
+                        break
+            except ApiError as exc:
+                history[-1]["content"] = f"⚠️ {exc.detail}"
+                yield history, "", chat_id, hist
                 return
 
-            history = [*history, {"role": "user", "content": message}]
-            hist = {**hist, chat_id: history}
-            yield history, "", hist
+            # chat_id is known only now (from the "chat" event) - save history once
+            if chat_id:
+                hist = {**hist, chat_id: history}
+            yield history, "", chat_id, hist
 
-            # --- placeholder instead of the LangGraph call -------------------
-            # Here goes: async for token in <SSE /chats/{id}/messages>: ...
-            reply = f"Echo: {message}"
-            history = [*history, {"role": "assistant", "content": ""}]
-            for end in range(3, len(reply) + 3, 3):
-                history[-1] = {"role": "assistant", "content": reply[:end]}
-                yield history, "", {**hist, chat_id: history}
-                await asyncio.sleep(0.03)
+        async def refresh_sidebar(access_token, chat_id, hist):
+            chats = await api.list_chats(access_token)
+            return _sidebar(chats, chat_id, hist)
 
         # -------------------------------------------------------------- wiring
         login_args = {
@@ -226,7 +248,9 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
         reg_btn.click(do_register, [reg_email, reg_password], [auth_msg])
         logout_btn.click(do_logout, None, SESSION_OUTPUTS)
 
-        new_chat_btn.click(on_new_chat, [token, histories], SIDEBAR_OUTPUTS)
+        new_chat_btn.click(
+            on_new_chat, [token, chats_state, histories], SIDEBAR_OUTPUTS
+        )
         chat_list.input(on_select, [chat_list, chats_state, histories], SIDEBAR_OUTPUTS)
         rename_btn.click(
             on_rename, [token, current_chat, rename_box, histories], SIDEBAR_OUTPUTS
@@ -235,8 +259,10 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
             on_delete, [token, current_chat, histories], [*SIDEBAR_OUTPUTS, histories]
         )
         msg.submit(
-            on_send, [msg, chatbot, current_chat, histories], [chatbot, msg, histories]
-        )
+            on_send,
+            [token, msg, chatbot, current_chat, histories],
+            [chatbot, msg, current_chat, histories],
+        ).then(refresh_sidebar, [token, current_chat, histories], SIDEBAR_OUTPUTS)
 
     return demo
 
