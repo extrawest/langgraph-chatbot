@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 import uuid
+from dataclasses import dataclass
 
 # from langchain_community.tools.tavily_search import TavilySearchResults
 
@@ -7,5 +7,6 @@ import uuid
 @dataclass
 class ContextSchema:
     user_id: uuid.UUID
+    chat_id: uuid.UUID
 
     # tavily_tool: TavilySearchResults
