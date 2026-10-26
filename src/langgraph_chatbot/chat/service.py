@@ -1,15 +1,29 @@
 import uuid
+from collections.abc import AsyncIterator
 
+from langchain_core.messages import HumanMessage
+from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from langgraph_chatbot.ai.context import ContextSchema
+from langgraph_chatbot.chat.events import (
+    ChatEvent,
+    DoneEvent,
+    ErrorEvent,
+    StreamEvent,
+    TokenEvent,
+)
 from langgraph_chatbot.chat.repository import ChatRepository
 from langgraph_chatbot.models.chat import Chat
 
 
 class ChatService:
-    def __init__(self, session: AsyncSession, repo: ChatRepository) -> None:
+    def __init__(
+        self, session: AsyncSession, repo: ChatRepository, graph: CompiledStateGraph
+    ) -> None:
         self._session = session
         self._repo = repo
+        self._graph = graph
 
     async def list_chats(self, user_id: uuid.UUID) -> list[Chat]:
         chats = await self._repo.list_for_user(user_id)
@@ -41,3 +55,26 @@ class ChatService:
     async def delete_chat(self, chat_id: uuid.UUID, user_id: uuid.UUID) -> None:
         await self._repo.delete(chat_id, user_id)
         await self._session.commit()
+
+    async def stream_reply(
+        self, chat: Chat, user_id: uuid.UUID, message
+    ) -> AsyncIterator[StreamEvent]:
+        chat_id = chat.id
+        yield ChatEvent(chat_id=chat_id, title=chat.title)
+        config = {"metadata": {"chat_id": str(chat_id)}}
+        context = ContextSchema(user_id=user_id, chat_id=chat_id)
+
+        try:
+            async for chunk, meta in self._graph.astream(
+                {"messages": [HumanMessage(content=message)]},
+                config=config,
+                context=context,
+                stream_mode="messages",
+            ):
+                if meta["langgraph_node"] == "agent" and isinstance(chunk.content, str):
+                    yield TokenEvent(text=chunk.content)
+        except Exception:
+            yield ErrorEvent(detail="Something went wrong")
+            return
+
+        yield DoneEvent()

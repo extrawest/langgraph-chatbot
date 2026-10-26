@@ -1,22 +1,23 @@
 import uuid
+from collections.abc import AsyncIterable
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from langgraph_chatbot.chat.deps import ChatServiceDep
-from langgraph_chatbot.deps import AuthServiceDep, CurrentUser
-from langgraph_chatbot.schemas.chat import ChatRead, ChatUpdate, UserChats
-from langgraph_chatbot.schemas.user import UserCreate, UserRead
-from langgraph_chatbot.users.repository import EmailAlreadyExists
+from langgraph_chatbot.chat.events import StreamEvent, TokenEvent
+from langgraph_chatbot.deps import CurrentUser
+from langgraph_chatbot.schemas.chat import ChatRead, ChatUpdate, MessageIn
 
 router = APIRouter(prefix="/chats")
 
 
-@router.get("/", response_model=UserChats)
+@router.get("", response_model=list[ChatRead])
 async def list_user_chats(current_user: CurrentUser, service: ChatServiceDep):
     chats = await service.list_chats(current_user.id)
 
-    response = UserChats.model_validate(chats)
-    return response
+    return chats
 
 
 @router.get("/{chat_id}", response_model=ChatRead)
@@ -40,14 +41,16 @@ async def rename_chat(
     return chat
 
 
-@router.post("/register", response_model=UserRead, status_code=201)
-async def register(data: UserCreate, auth_service: AuthServiceDep):
-    try:
-        user = await auth_service.register(data.email, data.password)
-        response = UserRead.model_validate(user)
-        return response
-    except EmailAlreadyExists:
-        raise HTTPException(
-            status_code=409,
-            detail="Email already registered",
-        )
+@router.post("/messages", response_class=EventSourceResponse)
+async def chat(
+    current_user: CurrentUser,
+    service: ChatServiceDep,
+    data: MessageIn,
+) -> AsyncIterable[ServerSentEvent]:
+    if not data.chat_id:
+        chat = await service.create_chat(current_user.id)
+    else:
+        chat = await service.get_chat(current_user.id)
+
+    async for event in service.stream_reply(chat.id, current_user.id, data.message):
+        yield ServerSentEvent(data=event, event=event.event_name)
