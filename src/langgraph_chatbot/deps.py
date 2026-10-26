@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import InvalidTokenError
+from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from langgraph_chatbot.auth.security import decode_access_token
@@ -65,8 +66,14 @@ async def get_current_active_user(
     return current_user
 
 
+def get_graph(request: Request):
+    return request.app.state.graph
+
+
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 UserRepoDep = Annotated[UserRepository, Depends(get_user_repo)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+GraphDep = Annotated[CompiledStateGraph, Depends(get_graph)]
