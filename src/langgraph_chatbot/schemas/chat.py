@@ -17,3 +17,8 @@ class ChatUpdate(BaseModel):
 class MessageIn(BaseModel):
     message: str
     chat_id: uuid.UUID | None = None
+
+
+class MessageRead(BaseModel):
+    role: str
+    content: str
