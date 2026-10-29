@@ -16,7 +16,6 @@ import gradio as gr
 from langgraph_chatbot.ui.api_client import ApiClient, ApiError
 
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
-DEFAULT_CHAT_TITLE = "New chat"
 
 # Gradio 5 needs type="messages"; Gradio 6 dropped the argument (messages only).
 _CHATBOT_KWARGS = (
@@ -26,6 +25,8 @@ _CHATBOT_KWARGS = (
 )
 # "leave this output untouched"
 _NOOP = gr.skip if hasattr(gr, "skip") else gr.update
+
+STORAGE_SECRET = os.environ.get("UI_STORAGE_SECRET", "dev-only-change-me")
 
 
 def _noops(count: int) -> tuple:
@@ -40,7 +41,7 @@ def _sidebar(chats: list[dict], selected: str | None, histories: dict) -> tuple:
     """
     ids = {chat["id"] for chat in chats}
     if selected not in ids:
-        selected = chats[0]["id"] if chats else None
+        selected = None  # no selection = "new chat" draft (created on first message)
     title = next((c["title"] for c in chats if c["id"] == selected), "")
     return (
         chats,
@@ -57,6 +58,9 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
     with gr.Blocks(title="LangGraph Chatbot") as demo:
         # per-browser-session state
         token = gr.State(None)
+        saved_token = gr.BrowserState(
+            None, storage_key="chatbot_token", secret=STORAGE_SECRET
+        )
         histories = gr.State({})  # chat_id -> list of messages (placeholder, in memory)
         chats_state = gr.State([])
         current_chat = gr.State(None)
@@ -109,6 +113,25 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
         ]  # fmt: skip
 
         # ------------------------------------------------------------ handlers
+        async def restore(access_token):
+            if not access_token:
+                return _noops(len(SESSION_OUTPUTS))
+
+            try:
+                me = await api.me(access_token)
+                chats = await api.list_chats(access_token)
+            except ApiError:
+                return _noops(len(SESSION_OUTPUTS))
+            return (
+                access_token,
+                {},
+                gr.Column(visible=False),
+                gr.Row(visible=True),
+                "",
+                f"👤 **{me['email']}**",
+                *_sidebar(chats, None, {}),
+            )
+
         async def do_login(email: str, password: str):
             email = (email or "").strip()
             if not email or not password:
@@ -153,16 +176,20 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                 *_sidebar([], None, {}),
             )
 
-        async def on_new_chat(access_token: str, chats: list[dict], hist: dict):
-            # try:
-            #     chat = await api.create_chat(access_token, DEFAULT_CHAT_TITLE)
-            #     chats = await api.list_chats(access_token)
-            # except ApiError as exc:
-            #     gr.Warning(exc.detail)
-            #     return _noops(5)
+        def on_new_chat(chats: list[dict], hist: dict):
+            # nothing is created here: the chat appears on the backend with the first message
             return _sidebar(chats, None, hist)
 
-        def on_select(chat_id: str | None, chats: list[dict], hist: dict):
+        async def on_select(
+            access_token: str, chat_id: str | None, chats: list[dict], hist: dict
+        ):
+            if chat_id:
+                try:
+                    messages = await api.get_messages(access_token, chat_id)
+                except ApiError as exc:
+                    gr.Warning(exc.detail)
+                    return _noops(5)
+                hist = {**hist, chat_id: messages}  # Qdrant is the source of truth
             return _sidebar(chats, chat_id, hist)
 
         async def on_rename(
@@ -243,15 +270,17 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
             "inputs": [login_email, login_password],
             "outputs": SESSION_OUTPUTS,
         }
-        login_btn.click(**login_args)
-        login_password.submit(**login_args)
+        login_btn.click(**login_args).then(lambda t: t, token, saved_token)
+        login_password.submit(**login_args).then(lambda t: t, token, saved_token)
         reg_btn.click(do_register, [reg_email, reg_password], [auth_msg])
-        logout_btn.click(do_logout, None, SESSION_OUTPUTS)
-
-        new_chat_btn.click(
-            on_new_chat, [token, chats_state, histories], SIDEBAR_OUTPUTS
+        logout_btn.click(do_logout, None, SESSION_OUTPUTS).then(
+            lambda: None, None, saved_token
         )
-        chat_list.input(on_select, [chat_list, chats_state, histories], SIDEBAR_OUTPUTS)
+
+        new_chat_btn.click(on_new_chat, [chats_state, histories], SIDEBAR_OUTPUTS)
+        chat_list.input(
+            on_select, [token, chat_list, chats_state, histories], SIDEBAR_OUTPUTS
+        )
         rename_btn.click(
             on_rename, [token, current_chat, rename_box, histories], SIDEBAR_OUTPUTS
         )
@@ -263,6 +292,7 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
             [token, msg, chatbot, current_chat, histories],
             [chatbot, msg, current_chat, histories],
         ).then(refresh_sidebar, [token, current_chat, histories], SIDEBAR_OUTPUTS)
+        demo.load(restore, saved_token, SESSION_OUTPUTS)
 
     return demo
 

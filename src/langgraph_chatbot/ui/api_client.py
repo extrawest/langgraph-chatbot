@@ -84,6 +84,9 @@ class ApiClient:
     async def list_chats(self, token: str) -> list[dict]:
         return await self._request("GET", "/chats", token=token)
 
+    async def get_messages(self, token: str, chat_id: str) -> list[dict]:
+        return await self._request("GET", f"/chats/{chat_id}/messages", token=token)
+
     async def create_chat(self, token: str, title: str) -> dict:
         return await self._request("POST", "/chats", token=token, json={"title": title})
 
