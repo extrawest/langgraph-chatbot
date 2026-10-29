@@ -2,4 +2,5 @@ from langgraph.graph import MessagesState
 
 
 class AppState(MessagesState):
-    user_id: str
+    # raw text of the current user turn; load_history turns it into a HumanMessage
+    user_input: str
