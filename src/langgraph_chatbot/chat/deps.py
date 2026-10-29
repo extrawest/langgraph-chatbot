@@ -16,8 +16,9 @@ def get_chat_service(
     session: SessionDep,
     chats: ChatRepoDep,
     graph: GraphDep,
+    messages_store: MessagesStoreDep,
 ) -> ChatService:
-    return ChatService(session, chats, graph)
+    return ChatService(session, chats, graph, messages_store)
 
 
 def get_messages_store(request: Request) -> MessagesStore:
