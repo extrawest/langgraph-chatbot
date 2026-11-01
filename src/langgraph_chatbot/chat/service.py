@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import AsyncIterator
 
+from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -83,7 +84,7 @@ class ChatService:
 
         try:
             async for chunk, meta in self._graph.astream(
-                {"user_input": message},
+                {"messages": [HumanMessage(content=message)]},
                 config=config,
                 context=context,
                 stream_mode="messages",
