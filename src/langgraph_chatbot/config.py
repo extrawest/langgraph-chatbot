@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     db_url: str
     vector_store_url: str
+    vector_store_api_key: SecretStr | None = None
 
     jwt_secret: str
     jwt_algorithm: str = "HS256"
@@ -17,6 +18,13 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr
     llm_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     llm_model: str = "gemini-3.5-flash-lite"
+
+    embedding_model: str = "gemini-embedding-001"
+    embedding_dims: int = 768
+
+    livekit_url: str
+    livekit_api_key: SecretStr | None = None
+    livekit_api_secret: SecretStr | None = None
 
 
 @lru_cache
