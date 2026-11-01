@@ -3,26 +3,33 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from langgraph_chatbot.ai.context import ContextSchema
+from langgraph_chatbot.ai.memory import UserMemory
 from langgraph_chatbot.ai.nodes.agent import (
     make_agent_node,
     make_load_history_node,
+    make_recall_node,
     make_save_node,
 )
 from langgraph_chatbot.ai.state import AppState
 from langgraph_chatbot.chat.repositories.messages_store import MessagesStore
 
 
-def build_graph(llm: BaseChatModel, messages_store: MessagesStore):
+def build_graph(
+    llm: BaseChatModel, messages_store: MessagesStore, user_memory: UserMemory
+):
     workflow = StateGraph(AppState, context_schema=ContextSchema)
     tool_node = ToolNode([])
 
     workflow.add_node("load_history", make_load_history_node(messages_store))
+    workflow.add_node("recall", make_recall_node(user_memory))
     workflow.add_node("agent", make_agent_node(llm))
-    workflow.add_node("save", make_save_node(messages_store))
+    workflow.add_node("save", make_save_node(messages_store, user_memory))
     workflow.add_node("agent_tools", tool_node)
 
+    # history (Qdrant) and long-term memory (Mem0) load in parallel; agent waits for both
     workflow.add_edge(START, "load_history")
-    workflow.add_edge("load_history", "agent")
+    workflow.add_edge(START, "recall")
+    workflow.add_edge(["load_history", "recall"], "agent")
     workflow.add_edge("agent", "save")
     workflow.add_edge("save", END)
     # workflow.add_conditional_edges(
