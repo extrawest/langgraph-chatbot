@@ -2,7 +2,12 @@ import asyncio
 import logging
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    convert_to_messages,
+)
 from langgraph.runtime import Runtime
 
 from langgraph_chatbot.ai.context import ContextSchema, Mode
@@ -60,10 +65,9 @@ def make_load_history_node(messages_store: MessagesStore):
         stored = await messages_store.recent(
             user_id=ctx.user_id, chat_id=ctx.chat_id, limit=HISTORY_LIMIT
         )
+        # plain dicts, not messages: see the note in AppState.history
         history = [
-            HumanMessage(content=m.content)
-            if m.role == "user"
-            else AIMessage(content=m.content)
+            {"role": "user" if m.role == "user" else "assistant", "content": m.content}
             for m in stored
         ]
         return {"history": history}
@@ -109,7 +113,7 @@ def make_agent_node(llm: BaseChatModel):
         response = await llm.ainvoke(
             [
                 SystemMessage(content=prompt),
-                *state.get("history", []),
+                *convert_to_messages(state.get("history", [])),
                 *_current_turn(state["messages"]),
             ]
         )
