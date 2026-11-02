@@ -58,9 +58,12 @@ async def get_chat_for_message(
     data: MessageIn, current_user: CurrentUser, service: ChatServiceDep
 ) -> Chat:
     """Runs before streaming starts, so a missing chat is a real 404, not a broken stream."""
-    if data.chat_id is None:
-        return await service.create_chat(current_user.id, make_title(data.message))
-    chat = await service.get_chat(data.chat_id, current_user.id)
+
+    chat = await service.get_or_create_chat(
+        chat_id=data.chat_id,
+        user_id=current_user.id,
+        title=make_title(data.message),
+    )
     if chat is None:
         raise HTTPException(status_code=404, detail="Chat not found")
     return chat

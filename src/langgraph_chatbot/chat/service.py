@@ -40,6 +40,13 @@ class ChatService:
         chat = await self._repo.get_by_id(chat_id, user_id)
         return chat
 
+    async def get_or_create_chat(
+        self, chat_id: uuid.UUID | None, user_id: uuid.UUID, title: str
+    ):
+        if chat_id is None:
+            return await self.create_chat(user_id, title)
+        return await self.get_chat(chat_id, user_id)
+
     async def create_chat(self, user_id: uuid.UUID, title: str) -> Chat:
         chat = Chat(user_id=user_id, title=title)
 
