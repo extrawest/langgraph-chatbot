@@ -124,3 +124,10 @@ class ApiClient:
                         event_name = None  # blank line = end of the event
         except httpx.RequestError as exc:
             raise ApiError(0, f"Backend is unreachable ({self._base_url})") from exc
+
+    async def start_voice_session(self, *, chat_id: str, token: str, **kwargs):
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        client = self._get_client()
+        response = await client.request("GET", "/voice-ui", headers=headers, **kwargs)
+
+        return response

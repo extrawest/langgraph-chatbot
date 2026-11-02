@@ -10,6 +10,8 @@ LangGraph endpoint later.
 
 import inspect
 import os
+from html import escape
+from urllib.parse import urlencode
 
 import gradio as gr
 
@@ -100,11 +102,22 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                     placeholder="Create a chat or pick one on the left",
                     **_CHATBOT_KWARGS,
                 )
-                msg = gr.Textbox(
-                    placeholder="Type a message and press Enter",
-                    show_label=False,
-                    container=False,
-                )
+                with gr.Column(visible=False) as voice_panel:
+                    voice_frame = gr.HTML()
+                    voice_close_btn = gr.Button(
+                        "✕ Close voice", variant="stop", size="sm"
+                    )
+                with gr.Row():
+                    msg = gr.Textbox(
+                        placeholder="Type a message and press Enter",
+                        show_label=False,
+                        container=False,
+                        submit_btn=True,
+                        scale=9,
+                    )
+                    voice_btn = gr.Button(
+                        "🎙", variant="secondary", scale=1, min_width=30
+                    )
 
         SIDEBAR_OUTPUTS = [chats_state, chat_list, current_chat, rename_box, chatbot]
         SESSION_OUTPUTS = [
@@ -223,8 +236,11 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
         async def on_send(
             access_token, message: str, history: list, chat_id: str | None, hist: dict
         ):
+            print(f"Message is: {message}")
             message = (message or "").strip()
             if not message:
+                print("here")
+                yield history, "", chat_id, hist
                 return
 
             history = [
@@ -260,11 +276,32 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                 hist = {**hist, chat_id: history}
             yield history, "", chat_id, hist
 
-        async def refresh_sidebar(access_token, chat_id, hist):
+        async def refresh_sidebar(access_token, chat_id):
             chats = await api.list_chats(access_token)
-            return _sidebar(chats, chat_id, hist)
+            radio = gr.Radio(
+                choices=[(c["title"], c["id"]) for c in chats],
+                value=chat_id,
+            )
+            return chats, radio
 
-        # -------------------------------------------------------------- wiring
+        def on_voice_open(access_token: str | None, chat_id: str | None):
+            if not access_token:
+                gr.Warning("Log in first")
+                return _noops(2)
+            # fragment (#...) is never sent to a server or written to logs
+            fragment = urlencode({"token": access_token, "chat_id": chat_id or ""})
+            src = escape(f"{api_url}/voice-ui/#{fragment}")
+            frame = (
+                f'<iframe src="{src}" allow="microphone; autoplay" '
+                'style="width:100%;height:560px;border:0;border-radius:12px">'
+                "</iframe>"
+            )
+            return frame, gr.Column(visible=True)
+
+        def on_voice_close():
+            # removing the iframe destroys the page -> LiveKit room disconnects
+            return "", gr.Column(visible=False)
+
         login_args = {
             "fn": do_login,
             "inputs": [login_email, login_password],
@@ -291,7 +328,11 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
             on_send,
             [token, msg, chatbot, current_chat, histories],
             [chatbot, msg, current_chat, histories],
-        ).then(refresh_sidebar, [token, current_chat, histories], SIDEBAR_OUTPUTS)
+        ).then(refresh_sidebar, [token, current_chat], [chats_state, chat_list])
+        voice_btn.click(on_voice_open, [token, current_chat], [voice_frame, voice_panel])
+        voice_close_btn.click(on_voice_close, None, [voice_frame, voice_panel]).then(
+            on_select, [token, current_chat, chats_state, histories], SIDEBAR_OUTPUTS
+        )
         demo.load(restore, saved_token, SESSION_OUTPUTS)
 
     return demo
