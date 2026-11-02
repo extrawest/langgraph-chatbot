@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from langgraph_chatbot.ai.bootstrap import build_runtime
 from langgraph_chatbot.auth.router import router as auth_router
 from langgraph_chatbot.chat.router import router as chat_router
 from langgraph_chatbot.config import get_settings
 from langgraph_chatbot.db import build_engine, build_sessionmaker
+from langgraph_chatbot.voice.router import router as voice_router
 
 
 @asynccontextmanager
@@ -33,3 +36,10 @@ app = FastAPI(title="Langgraph Chatbot", lifespan=lifespan)
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(voice_router)
+
+app.mount(
+    "/voice-ui",
+    StaticFiles(directory=Path(__file__).parent / "voice" / "static", html=True),
+    name="voice-ui",
+)

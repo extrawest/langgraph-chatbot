@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice chat</title>
+  <style>
+    :root {
+      --bg: #ffffff; --surface: #f4f4f5; --text: #18181b; --muted: #71717a;
+      --accent: #2563eb; --danger: #dc2626; --border: #e4e4e7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111113; --surface: #1c1c1f; --text: #f4f4f5; --muted: #a1a1aa;
+        --accent: #3b82f6; --danger: #ef4444; --border: #2e2e33;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex; justify-content: center;
+    }
+    main { width: 100%; max-width: 640px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    header { display: flex; justify-content: space-between; align-items: center; }
+    h1 { font-size: 1.1rem; margin: 0; }
+    .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+    .dot.live { background: #22c55e; }
+    .dot.thinking { background: #f59e0b; }
+    .dot.speaking { background: var(--accent); }
+    #transcript {
+      flex: 1; min-height: 320px; max-height: 60vh; overflow-y: auto; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 12px; padding: 12px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
+    .msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
+    .msg.interim { opacity: .6; }
+    .empty { color: var(--muted); text-align: center; margin: auto; }
+    .controls { display: flex; gap: 8px; }
+    button {
+      flex: 1; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+    }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #error { color: var(--danger); min-height: 1.5em; font-size: .9rem; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🎙️ Voice chat</h1>
+    <div class="status"><span id="dot" class="dot"></span><span id="status">не подключено</span></div>
+  </header>
+
+  <div id="transcript"><div class="empty" id="empty">Нажмите «Начать звонок» и говорите</div></div>
+  <div id="error" role="alert"></div>
+
+  <div class="controls">
+    <button id="start" class="primary">Начать звонок</button>
+    <button id="mute" disabled>🎤 Выключить микрофон</button>
+    <button id="end" class="danger" disabled>Завершить</button>
+  </div>
+
+  <div id="audio" hidden></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.20.2/dist/livekit-client.umd.min.js"></script>
+<script>
+  "use strict";
+
+  // --- Auth + chat come from the URL fragment (never sent to a server / logged) ---
+  const params = new URLSearchParams(location.hash.slice(1));
+  const accessToken = params.get("token");
+  const chatId = params.get("chat_id");   // empty = new chat
+  history.replaceState(null, "", location.pathname);   // wipe the token from the address bar
+
+  const $ = (id) => document.getElementById(id);
+  const startBtn = $("start"), muteBtn = $("mute"), endBtn = $("end");
+  const transcriptEl = $("transcript"), errorEl = $("error");
+
+  const { Room, RoomEvent, Track } = LivekitClient;
+  let room = null;
+  let micEnabled = true;
+  const segments = new Map();   // segment id -> element (interim text is replaced by the final one)
+
+  const STATE_LABELS = {
+    connecting: "подключение…", "pre-connect-buffering": "подключение…", initializing: "агент запускается…",
+    idle: "ожидание", listening: "слушает", thinking: "думает", speaking: "говорит",
+    disconnected: "звонок завершён", failed: "ошибка",
+  };
+
+  function setStatus(text, kind) {
+    $("status").textContent = text;
+    $("dot").className = "dot" + (kind ? " " + kind : "");
+  }
+
+  function showError(text) { errorEl.textContent = text || ""; }
+
+  function addMessage(role, text, { interim = false, segmentId = null } = {}) {
+    $("empty")?.remove();
+    let el = segmentId ? segments.get(segmentId) : null;
+    if (!el) {
+      el = document.createElement("div");
+      if (segmentId) segments.set(segmentId, el);
+      transcriptEl.appendChild(el);
+    }
+    el.className = `msg ${role}${interim ? " interim" : ""}`;
+    el.textContent = text;   // textContent, never innerHTML: transcripts are untrusted text
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  async function fetchVoiceToken() {
+    const response = await fetch("/voice/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ chat_id: chatId || null }),
+    });
+    if (!response.ok) {
+      const messages = {
+        401: "Сессия истекла: войдите заново в приложении",
+        404: "Чат не найден",
+        503: "Голосовой режим не настроен на сервере",
+      };
+      throw new Error(messages[response.status] || `Ошибка сервера (${response.status})`);
+    }
+    return response.json();
+  }
+
+  function resetUi() {
+    startBtn.disabled = !accessToken;
+    muteBtn.disabled = true;
+    endBtn.disabled = true;
+    micEnabled = true;
+    muteBtn.textContent = "🎤 Выключить микрофон";
+    $("audio").replaceChildren();
+    room = null;
+  }
+
+  async function startCall() {
+    showError("");
+    startBtn.disabled = true;
+    setStatus("подключение…");
+    try {
+      const { token, url } = await fetchVoiceToken();
+
+      room = new Room();
+
+      room.on(RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === Track.Kind.Audio) $("audio").appendChild(track.attach());
+      });
+      room.on(RoomEvent.TrackUnsubscribed, (track) => track.detach().forEach((el) => el.remove()));
+
+      room.on(RoomEvent.ParticipantAttributesChanged, (changed, participant) => {
+        const state = changed["lk.agent.state"];
+        if (state === undefined) return;
+        const kind = state === "speaking" ? "speaking" : state === "thinking" ? "thinking"
+                   : state === "listening" || state === "idle" ? "live" : "";
+        setStatus(STATE_LABELS[state] || state, kind);
+      });
+
+      room.on(RoomEvent.Disconnected, () => { setStatus("звонок завершён"); resetUi(); });
+
+      // Transcriptions (user speech and agent speech) arrive as text streams.
+      room.registerTextStreamHandler("lk.transcription", async (reader, participantInfo) => {
+        let text;
+        try { text = await reader.readAll(); } catch (err) { console.error(err); return; }
+        const attrs = reader.info.attributes ?? {};
+        if (!attrs["lk.transcribed_track_id"]) return;   // not a transcription
+        const isFinal = attrs["lk.transcription_final"] === "true";
+        const role = participantInfo.identity === room.localParticipant.identity ? "user" : "assistant";
+        addMessage(role, text, { interim: !isFinal, segmentId: attrs["lk.segment_id"] });
+      });
+
+      await room.connect(url, token);
+      await room.startAudio();   // browsers require a user gesture before playing audio
+      await room.localParticipant.setMicrophoneEnabled(true);
+
+      muteBtn.disabled = false;
+      endBtn.disabled = false;
+      setStatus("ожидание агента…", "live");
+    } catch (err) {
+      console.error(err);
+      showError(err.message || "Не удалось начать звонок");
+      setStatus("не подключено");
+      room?.disconnect();
+      resetUi();
+    }
+  }
+
+  async function toggleMute() {
+    if (!room) return;
+    micEnabled = !micEnabled;
+    await room.localParticipant.setMicrophoneEnabled(micEnabled);
+    muteBtn.textContent = micEnabled ? "🎤 Выключить микрофон" : "🔇 Включить микрофон";
+  }
+
+  startBtn.addEventListener("click", startCall);
+  muteBtn.addEventListener("click", toggleMute);
+  endBtn.addEventListener("click", () => room?.disconnect());
+  window.addEventListener("beforeunload", () => room?.disconnect());
+  window.addEventListener("pagehide", () => room?.disconnect());   // iframe removed / tab closed
+
+  if (!accessToken) {
+    showError("Нет токена авторизации: откройте страницу из приложения");
+    startBtn.disabled = true;
+  }
+</script>
+</body>
+</html>
