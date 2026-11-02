@@ -12,6 +12,7 @@ from livekit.plugins import elevenlabs, langchain, silero
 from langgraph_chatbot.ai.bootstrap import build_runtime
 from langgraph_chatbot.ai.context import ContextSchema, Mode
 from langgraph_chatbot.config import get_settings
+from langgraph_chatbot.voice.constants import VOICE_AGENT_NAME
 
 load_dotenv()
 
@@ -27,7 +28,7 @@ class Assistant(Agent):
 server = AgentServer()
 
 
-@server.rtc_session(agent_name="chatbot-voice")
+@server.rtc_session(agent_name=VOICE_AGENT_NAME)
 async def entrypoint(ctx: agents.JobContext):
     await ctx.connect()
     participant = await ctx.wait_for_participant()
@@ -40,7 +41,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     session = AgentSession(
         vad=silero.VAD.load(),
-        stt=elevenlabs.STT(model="assemblyai/universal-3-6-pro", language="en"),
+        stt=elevenlabs.STT(model="scribe_v2_realtime", language_code="ru"),
         llm=langchain.LLMAdapter(
             graph=runtime.graph,
             context=ContextSchema(
@@ -49,7 +50,7 @@ async def entrypoint(ctx: agents.JobContext):
                 mode=Mode.VOICE,
             ),
         ),
-        tts=elevenlabs.STT(model="assemblyai/universal-3-6-pro", language="en"),
+        tts=elevenlabs.TTS(voice_id=settings.eleven_voice_id, language="ru"),
         turn_handling=TurnHandlingOptions(turn_detection=inference.TurnDetector()),
     )
 
