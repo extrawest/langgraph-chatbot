@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     livekit_api_key: SecretStr | None = None
     livekit_api_secret: SecretStr | None = None
 
+    eleven_voice_id: str
+    eleven_api_key: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
