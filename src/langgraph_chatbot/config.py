@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     eleven_voice_id: str
     eleven_api_key: SecretStr | None = None
 
+    # hosted MCP servers; no API key = that server is switched off
+    tavily_api_key: SecretStr | None = None
+    tavily_mcp_url: str = "https://mcp.tavily.com/mcp/"
+    firecrawl_api_key: SecretStr | None = None
+    firecrawl_mcp_url: str = "https://mcp.firecrawl.dev/v2/mcp"
+
 
 @lru_cache
 def get_settings() -> Settings:
