@@ -1,8 +1,10 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from langchain.mcp import MCPAdapter
 
 from langgraph_chatbot.ai.bootstrap import build_runtime
 from langgraph_chatbot.auth.router import router as auth_router
@@ -10,6 +12,10 @@ from langgraph_chatbot.chat.router import router as chat_router
 from langgraph_chatbot.config import get_settings
 from langgraph_chatbot.db import build_engine, build_sessionmaker
 from langgraph_chatbot.voice.router import router as voice_router
+
+# our own logs at INFO (e.g. which MCP tools were loaded), libraries stay quiet
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("langgraph_chatbot").setLevel(logging.INFO)
 
 
 @asynccontextmanager

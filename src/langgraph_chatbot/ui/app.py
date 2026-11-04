@@ -278,7 +278,28 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                         history[-1]["content"] += data["text"]
                         yield history, "", chat_id, hist
                     elif event_name == "tool":
-                        gr.Info(f"🔎 {data['name']}: {data['status']}")
+                        if data["status"] == "started":
+                            tool_message = {
+                                "role": "assistant",
+                                "content": "",
+                                "metadata": {
+                                    "title": f"{data['name']}",
+                                    "status": "pending",
+                                },
+                            }
+                            history.insert(-1, tool_message)
+                        else:
+                            for msg in history:
+                                meta = msg.get("metadata")
+                                if (
+                                    isinstance(meta, dict)
+                                    and meta.get("status") == "pending"
+                                    and meta.get("title") == f"{data['name']}"
+                                ):
+                                    meta["status"] = "done"
+                                    break
+
+                        yield history, "", chat_id, hist
                     elif event_name == "error":
                         history[-1]["content"] += f"\n\n⚠️ {data['detail']}"
                         yield history, "", chat_id, hist

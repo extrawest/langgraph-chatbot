@@ -1,3 +1,4 @@
+import logging
 import uuid
 from collections.abc import AsyncIterator
 
@@ -12,11 +13,14 @@ from langgraph_chatbot.chat.events import (
     ErrorEvent,
     StreamEvent,
     TokenEvent,
+    ToolEvent,
 )
 from langgraph_chatbot.chat.repositories.messages_store import MessagesStore
 from langgraph_chatbot.chat.repositories.repository import ChatRepository
 from langgraph_chatbot.chat.vector_models.stored_message import StoredMessage
 from langgraph_chatbot.models.chat import Chat
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -96,14 +100,25 @@ class ChatService:
                 context=context,
                 stream_mode="messages",
             ):
-                if (
-                    meta["langgraph_node"] == "agent"
-                    and isinstance(chunk.content, str)
-                    and chunk.content
-                ):
-                    yield TokenEvent(text=chunk.content)
-        except Exception as e:
-            print(e)
+                node = meta["langgraph_node"]
+                if node == "agent":
+                    for call in chunk.tool_call_chunks or []:
+                        if call.get("name"):
+                            yield ToolEvent(name=call["name"], status="started")
+                    # .text, not .content: content may be a list of blocks
+                    if chunk.text:
+                        yield TokenEvent(text=str(chunk.text))
+                elif node == "agent_tools":
+                    result = str(chunk.text)
+                    logger.info(
+                        "Tool %s returned %d chars: %s",
+                        chunk.name,
+                        len(result),
+                        result[:2000],
+                    )
+                    yield ToolEvent(name=chunk.name, status="done")
+        except Exception:
+            logger.exception("Chat stream failed (chat_id=%s)", chat_id)
             yield ErrorEvent(detail="Something went wrong")
             return
 
