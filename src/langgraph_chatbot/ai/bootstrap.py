@@ -1,5 +1,11 @@
+import logging
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
+from urllib.parse import quote
 
+from fastmcp import Client
+from fastmcp.client.transports import StreamableHttpTransport
+from langchain.mcp import MCPAdapter
 from langchain_openai import OpenAIEmbeddings
 from langgraph.graph.state import CompiledStateGraph
 from qdrant_client import AsyncQdrantClient
@@ -9,6 +15,14 @@ from langgraph_chatbot.ai.llm import build_llm
 from langgraph_chatbot.ai.memory import UserMemory
 from langgraph_chatbot.chat.repositories.messages_store import MessagesStore
 from langgraph_chatbot.config import Settings
+
+logger = logging.getLogger(__name__)
+
+# Only quick tools go to the model: crawl/research-style ones take minutes, which is
+# useless in a chat and dead air in a voice call. The names of the tools each server
+# really exposes are logged at startup - if one of these is wrong, the list is empty.
+TAVILY_TOOLS = {"tavily_search", "tavily_extract"}
+FIRECRAWL_TOOLS = {"firecrawl_scrape", "firecrawl_search"}
 
 
 @dataclass
@@ -22,11 +36,38 @@ class AppRuntime:
     qdrant: AsyncQdrantClient
     messages_store: MessagesStore
     user_memory: UserMemory
+    mcp_adapter_async_stack: AsyncExitStack
     graph: CompiledStateGraph
 
     async def aclose(self) -> None:
-        await self.user_memory.aclose()
-        await self.qdrant.close()
+        # reverse order of creation; a failure in one must not skip the rest
+        try:
+            await self.mcp_adapter_async_stack.aclose()
+        finally:
+            try:
+                await self.user_memory.aclose()
+            finally:
+                await self.qdrant.close()
+
+
+async def _load_tools(
+    stack: AsyncExitStack, name: str, target, allowed: set[str]
+) -> list:
+    """Connect one MCP server and return its tools; [] if it is unavailable.
+
+    An MCP server being down must not take the chat (or a voice call) down with it.
+    The log line carries only the error type: messages can contain the URL with the key.
+    """
+    try:
+        adapter = await stack.enter_async_context(MCPAdapter(target))
+        tools = [t for t in await adapter.list_tools() if t.name in allowed]
+    except Exception as exc:
+        logger.warning(
+            "%s MCP unavailable (%s), continuing without it", name, type(exc).__name__
+        )
+        return []
+    logger.info("%s MCP tools: %s", name, [t.name for t in tools])
+    return tools
 
 
 async def build_runtime(
@@ -58,9 +99,31 @@ async def build_runtime(
 
     user_memory = UserMemory.from_settings(settings)
 
+    stack = AsyncExitStack()
+    tools = []
+    if settings.tavily_api_key:
+        # Tavily takes the key as a query parameter
+        key = quote(settings.tavily_api_key.get_secret_value(), safe="")
+        url = f"{settings.tavily_mcp_url}?tavilyApiKey={key}"
+        tools += await _load_tools(stack, "Tavily", url, TAVILY_TOOLS)
+    if settings.firecrawl_api_key:
+        firecrawl = Client(  # bearer token, so the key stays out of the URL
+            StreamableHttpTransport(
+                settings.firecrawl_mcp_url,
+                auth=settings.firecrawl_api_key.get_secret_value(),
+            )
+        )
+        tools += await _load_tools(stack, "Firecrawl", firecrawl, FIRECRAWL_TOOLS)
+
     return AppRuntime(
         qdrant=qdrant,
         messages_store=messages_store,
         user_memory=user_memory,
-        graph=build_graph(llm, messages_store, user_memory),
+        graph=build_graph(
+            llm,
+            messages_store,
+            user_memory,
+            tools,
+        ),
+        mcp_adapter_async_stack=stack,
     )
