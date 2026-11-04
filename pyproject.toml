@@ -21,7 +21,7 @@ dependencies = [
     "gradio (>=6.30.0,<7.0.0)",
     "httpx (>=0.28.1,<0.29.0)",
     "langgraph (>=1.2.16,<2.0.0)",
-    "langchain (>=1.4.7,<2.0.0)",
+    "langchain[mcp] (>=1.4.8,<2.0.0)",
     "langchain-google-genai (>=4.4.2,<5.0.0)",
     "langchain-openai (>=1.7.2,<2.0.0)",
     "qdrant-client (>=1.20.0,<2.0.0)",
@@ -30,6 +30,8 @@ dependencies = [
     "livekit-plugins-elevenlabs (>=1.8.10,<2.0.0)",
     "livekit-plugins-silero (>=1.8.10,<2.0.0)",
     "livekit-plugins-langchain (>=1.8.10,<2.0.0)",
+    "tavily-python (>=0.8.5,<0.9.0)",
+    "firecrawl-py (>=4.54.0,<5.0.0)",
 ]
 
 [tool.poetry]
