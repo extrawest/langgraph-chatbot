@@ -3,71 +3,64 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Voice chat</title>
+  <title>Voice</title>
   <style>
     :root {
-      --bg: #ffffff; --surface: #f4f4f5; --text: #18181b; --muted: #71717a;
+      color-scheme: light dark;
+      --surface: #f4f4f5; --text: #18181b; --muted: #71717a;
       --accent: #2563eb; --danger: #dc2626; --border: #e4e4e7;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #111113; --surface: #1c1c1f; --text: #f4f4f5; --muted: #a1a1aa;
+        --surface: #1c1c1f; --text: #f4f4f5; --muted: #a1a1aa;
         --accent: #3b82f6; --danger: #ef4444; --border: #2e2e33;
       }
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
-      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
-      display: flex; justify-content: center;
+    html, body { margin: 0; background: transparent; color: var(--text);
+      font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+    /* one compact row: status | live caption | controls */
+    .bar {
+      display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     }
-    main { width: 100%; max-width: 640px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-    header { display: flex; justify-content: space-between; align-items: center; }
-    h1 { font-size: 1.1rem; margin: 0; }
-    .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+    .status { display: flex; align-items: center; gap: 8px; flex: none; color: var(--muted); white-space: nowrap; }
     .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
     .dot.live { background: #22c55e; }
     .dot.thinking { background: #f59e0b; }
     .dot.speaking { background: var(--accent); }
-    #transcript {
-      flex: 1; min-height: 320px; max-height: 60vh; overflow-y: auto; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 12px; padding: 12px;
-      display: flex; flex-direction: column; gap: 8px;
+
+    /* what the mic hears right now; the full transcript lives in the main chat */
+    #caption {
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--muted);
     }
-    .msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
-    .msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
-    .msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
-    .msg.interim { opacity: .6; }
-    .empty { color: var(--muted); text-align: center; margin: auto; }
-    .controls { display: flex; gap: 8px; }
+    #caption.interim { font-style: italic; }
+    #caption.error { color: var(--danger); }
+
     button {
-      flex: 1; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border);
-      background: var(--surface); color: var(--text); font: inherit; cursor: pointer;
+      flex: none; height: 34px; min-width: 34px; padding: 0 12px; border-radius: 17px;
+      border: 1px solid var(--border); background: transparent; color: var(--text);
+      font: inherit; cursor: pointer;
     }
     button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
     button:disabled { opacity: .5; cursor: not-allowed; }
-    #error { color: var(--danger); min-height: 1.5em; font-size: .9rem; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>🎙️ Voice chat</h1>
-    <div class="status"><span id="dot" class="dot"></span><span id="status">не подключено</span></div>
-  </header>
+<div class="bar">
+  <div class="status"><span id="dot" class="dot"></span><span id="status">не подключено</span></div>
+  <div id="caption"></div>
 
-  <div id="transcript"><div class="empty" id="empty">Нажмите «Начать звонок» и говорите</div></div>
-  <div id="error" role="alert"></div>
-
-  <div class="controls">
-    <button id="start" class="primary">Начать звонок</button>
-    <button id="mute" disabled>🎤 Выключить микрофон</button>
-    <button id="end" class="danger" disabled>Завершить</button>
-  </div>
-
-  <div id="audio" hidden></div>
-</main>
+  <button id="sound" hidden title="Браузер заблокировал звук">🔊 Включить звук</button>
+  <button id="start" class="primary">Начать</button>
+  <button id="mute" hidden title="Микрофон" aria-label="Микрофон">🎤</button>
+  <button id="end" class="danger" hidden title="Завершить" aria-label="Завершить">✕</button>
+</div>
+<div id="audio" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.20.2/dist/livekit-client.umd.min.js"></script>
 <script>
@@ -80,14 +73,14 @@
   history.replaceState(null, "", location.pathname);   // wipe the token from the address bar
 
   const $ = (id) => document.getElementById(id);
-  const startBtn = $("start"), muteBtn = $("mute"), endBtn = $("end");
-  const transcriptEl = $("transcript"), errorEl = $("error");
+  const startBtn = $("start"), muteBtn = $("mute"), endBtn = $("end"), soundBtn = $("sound");
+  const captionEl = $("caption");
 
   const { Room, RoomEvent, Track } = LivekitClient;
   let room = null;
   let micEnabled = true;
-  const segments = new Map();   // segment id -> element (interim text is replaced by the final one)
 
+  const IDLE_HINT = "Говорите: реплики появятся в чате";
   const STATE_LABELS = {
     connecting: "подключение…", "pre-connect-buffering": "подключение…", initializing: "агент запускается…",
     idle: "ожидание", listening: "слушает", thinking: "думает", speaking: "говорит",
@@ -99,19 +92,11 @@
     $("dot").className = "dot" + (kind ? " " + kind : "");
   }
 
-  function showError(text) { errorEl.textContent = text || ""; }
-
-  function addMessage(role, text, { interim = false, segmentId = null } = {}) {
-    $("empty")?.remove();
-    let el = segmentId ? segments.get(segmentId) : null;
-    if (!el) {
-      el = document.createElement("div");
-      if (segmentId) segments.set(segmentId, el);
-      transcriptEl.appendChild(el);
-    }
-    el.className = `msg ${role}${interim ? " interim" : ""}`;
-    el.textContent = text;   // textContent, never innerHTML: transcripts are untrusted text
-    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  // kind: "" | "interim" | "error"
+  function setCaption(text, kind = "") {
+    captionEl.textContent = text || "";
+    captionEl.className = kind;
+    captionEl.title = text || "";
   }
 
   async function fetchVoiceToken() {
@@ -131,19 +116,26 @@
     return response.json();
   }
 
+  // idle = can start a call; live = in a call
+  function showControls(live) {
+    startBtn.hidden = live;
+    muteBtn.hidden = !live;
+    endBtn.hidden = !live;
+    if (!live) soundBtn.hidden = true;
+  }
+
   function resetUi() {
+    showControls(false);
     startBtn.disabled = !accessToken;
-    muteBtn.disabled = true;
-    endBtn.disabled = true;
     micEnabled = true;
-    muteBtn.textContent = "🎤 Выключить микрофон";
+    muteBtn.textContent = "🎤";
     $("audio").replaceChildren();
     room = null;
   }
 
   async function startCall() {
-    showError("");
     startBtn.disabled = true;
+    setCaption("");
     setStatus("подключение…");
     try {
       const { token, url } = await fetchVoiceToken();
@@ -155,7 +147,10 @@
       });
       room.on(RoomEvent.TrackUnsubscribed, (track) => track.detach().forEach((el) => el.remove()));
 
-      room.on(RoomEvent.ParticipantAttributesChanged, (changed, participant) => {
+      // browsers may block audio until a click inside this frame: offer a button then
+      room.on(RoomEvent.AudioPlaybackStatusChanged, () => { soundBtn.hidden = room.canPlaybackAudio; });
+
+      room.on(RoomEvent.ParticipantAttributesChanged, (changed) => {
         const state = changed["lk.agent.state"];
         if (state === undefined) return;
         const kind = state === "speaking" ? "speaking" : state === "thinking" ? "thinking"
@@ -165,27 +160,27 @@
 
       room.on(RoomEvent.Disconnected, () => { setStatus("звонок завершён"); resetUi(); });
 
-      // Transcriptions (user speech and agent speech) arrive as text streams.
+      // Transcriptions arrive as text streams. Only the user's own words are shown here
+      // (a live "what I hear" caption); the full dialogue appears in the main chat.
       room.registerTextStreamHandler("lk.transcription", async (reader, participantInfo) => {
         let text;
         try { text = await reader.readAll(); } catch (err) { console.error(err); return; }
         const attrs = reader.info.attributes ?? {};
-        if (!attrs["lk.transcribed_track_id"]) return;   // not a transcription
-        const isFinal = attrs["lk.transcription_final"] === "true";
-        const role = participantInfo.identity === room.localParticipant.identity ? "user" : "assistant";
-        addMessage(role, text, { interim: !isFinal, segmentId: attrs["lk.segment_id"] });
+        if (!attrs["lk.transcribed_track_id"]) return;
+        if (participantInfo.identity !== room.localParticipant.identity) return;
+        setCaption(text, attrs["lk.transcription_final"] === "true" ? "" : "interim");
       });
 
       await room.connect(url, token);
-      await room.startAudio();   // browsers require a user gesture before playing audio
+      await room.startAudio().catch(() => {});   // may need a click: see the sound button
       await room.localParticipant.setMicrophoneEnabled(true);
 
-      muteBtn.disabled = false;
-      endBtn.disabled = false;
+      showControls(true);
+      setCaption(IDLE_HINT);
       setStatus("ожидание агента…", "live");
     } catch (err) {
       console.error(err);
-      showError(err.message || "Не удалось начать звонок");
+      setCaption(err.message || "Не удалось начать звонок", "error");
       setStatus("не подключено");
       room?.disconnect();
       resetUi();
@@ -196,18 +191,27 @@
     if (!room) return;
     micEnabled = !micEnabled;
     await room.localParticipant.setMicrophoneEnabled(micEnabled);
-    muteBtn.textContent = micEnabled ? "🎤 Выключить микрофон" : "🔇 Включить микрофон";
+    muteBtn.textContent = micEnabled ? "🎤" : "🔇";
+    muteBtn.title = micEnabled ? "Выключить микрофон" : "Включить микрофон";
   }
 
   startBtn.addEventListener("click", startCall);
   muteBtn.addEventListener("click", toggleMute);
-  endBtn.addEventListener("click", () => room?.disconnect());
+  endBtn.addEventListener("click", () => {
+    room?.disconnect();
+    // tell the host page to close voice mode entirely (panel, polling); carries no secrets
+    window.parent.postMessage({ type: "voice-closed" }, "*");
+  });
+  soundBtn.addEventListener("click", () => room?.startAudio());
   window.addEventListener("beforeunload", () => room?.disconnect());
   window.addEventListener("pagehide", () => room?.disconnect());   // iframe removed / tab closed
 
   if (!accessToken) {
-    showError("Нет токена авторизации: откройте страницу из приложения");
+    setCaption("Нет токена авторизации: откройте страницу из приложения", "error");
     startBtn.disabled = true;
+  } else {
+    // the frame is opened by a click in the main app, so start right away
+    startCall();
   }
 </script>
 </body>
