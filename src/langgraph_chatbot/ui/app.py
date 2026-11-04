@@ -9,9 +9,10 @@ LangGraph endpoint later.
 """
 
 import inspect
+import json
 import os
 from html import escape
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import gradio as gr
 
@@ -54,6 +55,22 @@ def _sidebar(chats: list[dict], selected: str | None, histories: dict) -> tuple:
     )
 
 
+def _voice_listener_js(api_url: str) -> str:
+    """Page-load JS: when the voice frame posts "voice-closed", click the hidden button."""
+    parts = urlsplit(api_url)
+    origin = json.dumps(f"{parts.scheme}://{parts.netloc}")
+    return f"""() => {{
+        if (window.__voiceListener) return;
+        window.__voiceListener = true;
+        window.addEventListener("message", (event) => {{
+            if (event.origin !== {origin}) return;
+            if (!event.data || event.data.type !== "voice-closed") return;
+            const el = document.getElementById("voice-closed");
+            (el && el.tagName === "BUTTON" ? el : el?.querySelector("button"))?.click();
+        }});
+    }}"""
+
+
 def build_ui(api_url: str = API_URL) -> gr.Blocks:
     api = ApiClient(api_url)
 
@@ -66,6 +83,7 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
         histories = gr.State({})  # chat_id -> list of messages (placeholder, in memory)
         chats_state = gr.State([])
         current_chat = gr.State(None)
+        voice_timer = gr.Timer(2.0, active=False)
 
         # ---------------------------------------------------------------- auth
         with gr.Column(visible=True) as auth_view:
@@ -104,9 +122,6 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                 )
                 with gr.Column(visible=False) as voice_panel:
                     voice_frame = gr.HTML()
-                    voice_close_btn = gr.Button(
-                        "✕ Close voice", variant="stop", size="sm"
-                    )
                 with gr.Row():
                     msg = gr.Textbox(
                         placeholder="Type a message and press Enter",
@@ -118,6 +133,9 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                     voice_btn = gr.Button(
                         "🎙", variant="secondary", scale=1, min_width=30
                     )
+                # clicked from JS when the voice frame says "voice-closed"; it must live
+                # outside voice_panel (a hidden Column is not in the DOM)
+                voice_closed = gr.Button(visible="hidden", elem_id="voice-closed")
 
         SIDEBAR_OUTPUTS = [chats_state, chat_list, current_chat, rename_box, chatbot]
         SESSION_OUTPUTS = [
@@ -287,20 +305,33 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
         def on_voice_open(access_token: str | None, chat_id: str | None):
             if not access_token:
                 gr.Warning("Log in first")
-                return _noops(2)
+                return _noops(3)
             # fragment (#...) is never sent to a server or written to logs
             fragment = urlencode({"token": access_token, "chat_id": chat_id or ""})
             src = escape(f"{api_url}/voice-ui/#{fragment}")
             frame = (
                 f'<iframe src="{src}" allow="microphone; autoplay" '
-                'style="width:100%;height:560px;border:0;border-radius:12px">'
+                'style="width:100%;height:56px;border:0;border-radius:12px">'
                 "</iframe>"
             )
-            return frame, gr.Column(visible=True)
+
+            return frame, gr.Column(visible=True), gr.Timer(active=True)
+
+        async def poll_chat(access_token, chat_id, history):
+            # a chat without an id yet (brand-new voice chat) has nothing to poll
+            if not access_token or not chat_id:
+                return _NOOP()
+            try:
+                messages = await api.get_messages(access_token, chat_id)
+            except ApiError:
+                return _NOOP()
+            if len(messages) == len(history):
+                return _NOOP()
+            return messages
 
         def on_voice_close():
             # removing the iframe destroys the page -> LiveKit room disconnects
-            return "", gr.Column(visible=False)
+            return "", gr.Column(visible=False), gr.Timer(active=False)
 
         login_args = {
             "fn": do_login,
@@ -329,11 +360,19 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
             [token, msg, chatbot, current_chat, histories],
             [chatbot, msg, current_chat, histories],
         ).then(refresh_sidebar, [token, current_chat], [chats_state, chat_list])
-        voice_btn.click(on_voice_open, [token, current_chat], [voice_frame, voice_panel])
-        voice_close_btn.click(on_voice_close, None, [voice_frame, voice_panel]).then(
+        voice_btn.click(
+            on_voice_open,
+            [token, current_chat],
+            [voice_frame, voice_panel, voice_timer],
+        )
+        voice_closed.click(
+            on_voice_close, None, [voice_frame, voice_panel, voice_timer]
+        ).then(
             on_select, [token, current_chat, chats_state, histories], SIDEBAR_OUTPUTS
         )
+        voice_timer.tick(poll_chat, [token, current_chat, chatbot], [chatbot])
         demo.load(restore, saved_token, SESSION_OUTPUTS)
+        demo.load(None, None, None, js=_voice_listener_js(api_url))
 
     return demo
 
