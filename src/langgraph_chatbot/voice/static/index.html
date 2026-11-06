@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -52,13 +52,13 @@
 </head>
 <body>
 <div class="bar">
-  <div class="status"><span id="dot" class="dot"></span><span id="status">не подключено</span></div>
+  <div class="status"><span id="dot" class="dot"></span><span id="status">not connected</span></div>
   <div id="caption"></div>
 
-  <button id="sound" hidden title="Браузер заблокировал звук">🔊 Включить звук</button>
-  <button id="start" class="primary">Начать</button>
-  <button id="mute" hidden title="Микрофон" aria-label="Микрофон">🎤</button>
-  <button id="end" class="danger" hidden title="Завершить" aria-label="Завершить">✕</button>
+  <button id="sound" hidden title="The browser blocked audio">🔊 Enable sound</button>
+  <button id="start" class="primary">Start</button>
+  <button id="mute" hidden title="Microphone" aria-label="Microphone">🎤</button>
+  <button id="end" class="danger" hidden title="End call" aria-label="End call">✕</button>
 </div>
 <div id="audio" hidden></div>
 
@@ -80,11 +80,11 @@
   let room = null;
   let micEnabled = true;
 
-  const IDLE_HINT = "Говорите: реплики появятся в чате";
+  const IDLE_HINT = "Speak: your words will appear in the chat";
   const STATE_LABELS = {
-    connecting: "подключение…", "pre-connect-buffering": "подключение…", initializing: "агент запускается…",
-    idle: "ожидание", listening: "слушает", thinking: "думает", speaking: "говорит",
-    disconnected: "звонок завершён", failed: "ошибка",
+    connecting: "connecting…", "pre-connect-buffering": "connecting…", initializing: "agent is starting…",
+    idle: "idle", listening: "listening", thinking: "thinking", speaking: "speaking",
+    disconnected: "call ended", failed: "error",
   };
 
   function setStatus(text, kind) {
@@ -107,11 +107,11 @@
     });
     if (!response.ok) {
       const messages = {
-        401: "Сессия истекла: войдите заново в приложении",
-        404: "Чат не найден",
-        503: "Голосовой режим не настроен на сервере",
+        401: "Session expired: sign in again in the app",
+        404: "Chat not found",
+        503: "Voice mode is not configured on the server",
       };
-      throw new Error(messages[response.status] || `Ошибка сервера (${response.status})`);
+      throw new Error(messages[response.status] || `Server error (${response.status})`);
     }
     return response.json();
   }
@@ -136,7 +136,7 @@
   async function startCall() {
     startBtn.disabled = true;
     setCaption("");
-    setStatus("подключение…");
+    setStatus("connecting…");
     try {
       const { token, url } = await fetchVoiceToken();
 
@@ -158,7 +158,7 @@
         setStatus(STATE_LABELS[state] || state, kind);
       });
 
-      room.on(RoomEvent.Disconnected, () => { setStatus("звонок завершён"); resetUi(); });
+      room.on(RoomEvent.Disconnected, () => { setStatus("call ended"); resetUi(); });
 
       // Transcriptions arrive as text streams. Only the user's own words are shown here
       // (a live "what I hear" caption); the full dialogue appears in the main chat.
@@ -177,11 +177,11 @@
 
       showControls(true);
       setCaption(IDLE_HINT);
-      setStatus("ожидание агента…", "live");
+      setStatus("waiting for the agent…", "live");
     } catch (err) {
       console.error(err);
-      setCaption(err.message || "Не удалось начать звонок", "error");
-      setStatus("не подключено");
+      setCaption(err.message || "Could not start the call", "error");
+      setStatus("not connected");
       room?.disconnect();
       resetUi();
     }
@@ -192,7 +192,7 @@
     micEnabled = !micEnabled;
     await room.localParticipant.setMicrophoneEnabled(micEnabled);
     muteBtn.textContent = micEnabled ? "🎤" : "🔇";
-    muteBtn.title = micEnabled ? "Выключить микрофон" : "Включить микрофон";
+    muteBtn.title = micEnabled ? "Mute microphone" : "Unmute microphone";
   }
 
   startBtn.addEventListener("click", startCall);
@@ -207,7 +207,7 @@
   window.addEventListener("pagehide", () => room?.disconnect());   // iframe removed / tab closed
 
   if (!accessToken) {
-    setCaption("Нет токена авторизации: откройте страницу из приложения", "error");
+    setCaption("No auth token: open this page from the app", "error");
     startBtn.disabled = true;
   } else {
     // the frame is opened by a click in the main app, so start right away
