@@ -69,6 +69,14 @@ def _question(messages: list[BaseMessage]) -> str:
     return str(_current_turn(messages)[0].text)
 
 
+def _turn_id(messages: list[BaseMessage]) -> str:
+    """Id of the newest user message: the same for every retry of a node in this turn.
+
+    The graph state assigns ids to messages (add_messages), LiveKit sets its own.
+    """
+    return str(_current_turn(messages)[0].id)
+
+
 def make_load_history_node(messages_store: MessagesStore):
     async def load_history(state: AppState, runtime: Runtime[ContextSchema]):
         ctx = runtime.context
@@ -132,6 +140,24 @@ def make_agent_node(llm: BaseChatModel):
     return chat
 
 
+def make_save_user_question_node(
+    messages_store: MessagesStore, user_memory: UserMemory
+):
+    async def save_user_question(state: AppState, runtime: Runtime[ContextSchema]):
+        ctx = runtime.context
+        question = _question(state["messages"])
+        # .text, not .content: content may be a list of blocks, and embedding it fails
+        await messages_store.add(
+            user_id=ctx.user_id,
+            chat_id=ctx.chat_id,
+            turn_id=_turn_id(state["messages"]),
+            role="user",
+            content=question,
+        )
+
+    return save_user_question
+
+
 def make_save_node(messages_store: MessagesStore, user_memory: UserMemory):
     async def save(state: AppState, runtime: Runtime[ContextSchema]):
         ctx = runtime.context
@@ -139,14 +165,11 @@ def make_save_node(messages_store: MessagesStore, user_memory: UserMemory):
         # .text, not .content: content may be a list of blocks, and embedding it fails
         answer = str(state["messages"][-1].text)
 
-        # sequential on purpose: the user message must get the earlier created_at
-        await messages_store.add(
-            user_id=ctx.user_id, chat_id=ctx.chat_id, role="user", content=question
-        )
-        if answer:  # an empty text cannot be embedded
+        if answer:
             await messages_store.add(
                 user_id=ctx.user_id,
                 chat_id=ctx.chat_id,
+                turn_id=_turn_id(state["messages"]),
                 role="assistant",
                 content=answer,
             )

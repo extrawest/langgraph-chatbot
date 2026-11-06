@@ -1,5 +1,5 @@
 import time
-from uuid import UUID, uuid4
+from uuid import UUID, uuid5
 
 from langchain_core.embeddings import Embeddings
 from qdrant_client import AsyncQdrantClient, models
@@ -13,6 +13,10 @@ from qdrant_client.models import (
 )
 
 from langgraph_chatbot.chat.vector_models.stored_message import StoredMessage
+
+
+# fixed namespace for deterministic point ids (any constant UUID works, it must not change)
+_POINT_NAMESPACE = UUID("6f1c3b7e-5a2d-4c8e-9b41-2d7a0e5f8c13")
 
 
 class MessagesStore:
@@ -59,12 +63,19 @@ class MessagesStore:
         *,
         user_id: UUID,
         chat_id: UUID,
+        turn_id: str,
         role: str,
         content: str,
     ) -> None:
+        """Store one message. Idempotent: the same (user, chat, turn, role) is the same
+        point, so a retried graph node overwrites it instead of adding a duplicate.
+
+        `turn_id` must come from durable state (the id of the user's message), never
+        be generated here - a retry would get a new one.
+        """
         vector = await self._embeddings.aembed_query(content[:2000])
         point = PointStruct(
-            id=str(uuid4()),
+            id=str(uuid5(_POINT_NAMESPACE, f"{user_id}:{chat_id}:{turn_id}:{role}")),
             vector=vector,
             payload={
                 "group_id": str(user_id),
