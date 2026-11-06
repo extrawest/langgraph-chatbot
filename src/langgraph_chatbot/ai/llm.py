@@ -12,4 +12,5 @@ def build_llm(settings: Settings) -> BaseChatModel:
     return ChatGoogleGenerativeAI(
         model=settings.llm_model,
         api_key=settings.llm_api_key.get_secret_value(),
+        max_retries=1,
     )
