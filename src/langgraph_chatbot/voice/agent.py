@@ -1,3 +1,5 @@
+import logging
+
 from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import (
@@ -12,10 +14,15 @@ from livekit.plugins import elevenlabs, langchain, silero
 from langgraph_chatbot.ai.bootstrap import build_runtime
 from langgraph_chatbot.ai.context import ContextSchema, Mode
 from langgraph_chatbot.config import get_settings
+from langgraph_chatbot.logger import log_context, setup_logging
 from langgraph_chatbot.voice.constants import VOICE_AGENT_NAME
 from langgraph_chatbot.voice.spoken_graph import SpokenOnly
 
+# .env first: setup_logging reads LOG_LEVEL / LOG_FORMAT from the environment
 load_dotenv()
+setup_logging()
+
+logger = logging.getLogger(__name__)
 
 
 class Assistant(Agent):
@@ -32,13 +39,27 @@ server = AgentServer()
 @server.rtc_session(agent_name=VOICE_AGENT_NAME)
 async def entrypoint(ctx: agents.JobContext):
     await ctx.connect()
-    participant = await ctx.wait_for_participant()
+    try:
+        participant = await ctx.wait_for_participant()
+    except RuntimeError:
+        logger.info("Room closed before a participant joined")
+        return
 
     user_id = participant.identity
-    chat_id = participant.attributes["chat_id"]
+    chat_id = participant.attributes.get("chat_id")
+    if not chat_id:
+        logger.error("Participant %s joined without a chat_id", user_id)
+        ctx.shutdown(reason="missing chat_id")
+        return
+    log_context.set({"chat_id": chat_id, "user_id": user_id, "mode": "voice"})
 
     settings = get_settings()
-    runtime = await build_runtime(settings, ensure_collection=False)
+    try:
+        runtime = await build_runtime(settings, ensure_collection=False)
+    except Exception:
+        logger.exception("Voice runtime failed to start")
+        ctx.shutdown(reason="runtime failed to start")
+        return
 
     session = AgentSession(
         vad=silero.VAD.load(),
@@ -59,7 +80,11 @@ async def entrypoint(ctx: agents.JobContext):
     def _on_text(ev): ...
 
     @session.on("error")
-    def _on_error(ev): ...
+    def _on_error(ev):
+        # ev.source is the STT / LLM / TTS component that failed
+        logger.error(
+            "Voice session error from %s: %s", type(ev.source).__name__, ev.error
+        )
 
     ctx.add_shutdown_callback(runtime.aclose)
     await session.start(room=ctx.room, agent=Assistant())
