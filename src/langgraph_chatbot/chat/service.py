@@ -18,9 +18,19 @@ from langgraph_chatbot.chat.events import (
 from langgraph_chatbot.chat.repositories.messages_store import MessagesStore
 from langgraph_chatbot.chat.repositories.repository import ChatRepository
 from langgraph_chatbot.chat.vector_models.stored_message import StoredMessage
+from langgraph_chatbot.logger import log_context
 from langgraph_chatbot.models.chat import Chat
 
 logger = logging.getLogger(__name__)
+
+
+def _user_message(exc: Exception) -> str:
+    if isinstance(exc, TimeoutError):
+        return "The request took too long, please try again"
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if status == 429:
+        return "The service is busy right now, please try again in a moment"
+    return "Something went wrong"
 
 
 class ChatService:
@@ -89,6 +99,11 @@ class ChatService:
         self, chat: Chat, user_id: uuid.UUID, message
     ) -> AsyncIterator[StreamEvent]:
         chat_id = chat.id
+        # every log record of this request (nodes included) now carries these fields;
+        # no reset: each request runs in its own task, so nothing leaks to others
+        log_context.set(
+            {"chat_id": str(chat_id), "user_id": str(user_id), "mode": "text"}
+        )
         yield ChatEvent(chat_id=chat_id, title=chat.title)
         config = {"metadata": {"chat_id": str(chat_id)}}
         context = ContextSchema(user_id=user_id, chat_id=chat_id)
@@ -117,9 +132,9 @@ class ChatService:
                         result[:2000],
                     )
                     yield ToolEvent(name=chunk.name, status="done")
-        except Exception:
+        except Exception as exc:
             logger.exception("Chat stream failed (chat_id=%s)", chat_id)
-            yield ErrorEvent(detail="Something went wrong")
+            yield ErrorEvent(detail=_user_message(exc))
             return
 
         yield DoneEvent()
