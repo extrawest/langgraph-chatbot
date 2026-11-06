@@ -36,18 +36,14 @@ class AppRuntime:
     qdrant: AsyncQdrantClient
     messages_store: MessagesStore
     user_memory: UserMemory
-    mcp_adapter_async_stack: AsyncExitStack
     graph: CompiledStateGraph
+    # owns everything that must be closed: MCP adapters, Mem0, Qdrant
+    stack: AsyncExitStack
 
     async def aclose(self) -> None:
-        # reverse order of creation; a failure in one must not skip the rest
-        try:
-            await self.mcp_adapter_async_stack.aclose()
-        finally:
-            try:
-                await self.user_memory.aclose()
-            finally:
-                await self.qdrant.close()
+        # closes in reverse order of creation; a failure in one callback does not
+        # skip the others
+        await self.stack.aclose()
 
 
 async def _load_tools(
@@ -75,55 +71,60 @@ async def build_runtime(
 ) -> AppRuntime:
     llm = build_llm(settings)
 
-    qdrant = AsyncQdrantClient(
-        url=settings.vector_store_url,
-        api_key=(
-            settings.vector_store_api_key.get_secret_value()
-            if settings.vector_store_api_key
-            else None
-        ),
-    )
-    messages_store = MessagesStore(
-        collection_name="messages",
-        client=qdrant,
-        embeddings=OpenAIEmbeddings(
-            model=settings.embedding_model,
-            api_key=settings.llm_api_key.get_secret_value(),
-            base_url=settings.llm_base_url,
-            dimensions=settings.embedding_dims,
-            check_embedding_ctx_length=False,
-        ),
-    )
-    if ensure_collection:
-        await messages_store.ensure_collection()
-
-    user_memory = UserMemory.from_settings(settings)
-
-    stack = AsyncExitStack()
-    tools = []
-    if settings.tavily_api_key:
-        # Tavily takes the key as a query parameter
-        key = quote(settings.tavily_api_key.get_secret_value(), safe="")
-        url = f"{settings.tavily_mcp_url}?tavilyApiKey={key}"
-        tools += await _load_tools(stack, "Tavily", url, TAVILY_TOOLS)
-    if settings.firecrawl_api_key:
-        firecrawl = Client(  # bearer token, so the key stays out of the URL
-            StreamableHttpTransport(
-                settings.firecrawl_mcp_url,
-                auth=settings.firecrawl_api_key.get_secret_value(),
-            )
+    # Every resource goes into the stack right after it is created. If anything below
+    # fails, `async with` closes what already exists (reverse order) and the original
+    # error propagates. On success pop_all() hands the ownership to the runtime.
+    async with AsyncExitStack() as stack:
+        qdrant = AsyncQdrantClient(
+            url=settings.vector_store_url,
+            api_key=(
+                settings.vector_store_api_key.get_secret_value()
+                if settings.vector_store_api_key
+                else None
+            ),
         )
-        tools += await _load_tools(stack, "Firecrawl", firecrawl, FIRECRAWL_TOOLS)
+        stack.push_async_callback(qdrant.close)
 
-    return AppRuntime(
-        qdrant=qdrant,
-        messages_store=messages_store,
-        user_memory=user_memory,
-        graph=build_graph(
-            llm,
-            messages_store,
-            user_memory,
-            tools,
-        ),
-        mcp_adapter_async_stack=stack,
-    )
+        messages_store = MessagesStore(
+            collection_name="messages",
+            client=qdrant,
+            embeddings=OpenAIEmbeddings(
+                model=settings.embedding_model,
+                api_key=settings.llm_api_key.get_secret_value(),
+                base_url=settings.llm_base_url,
+                dimensions=settings.embedding_dims,
+                check_embedding_ctx_length=False,
+            ),
+        )
+        if ensure_collection:
+            await messages_store.ensure_collection()
+
+        user_memory = UserMemory.from_settings(settings)
+        # registered after Qdrant, so it closes first: pending Mem0 writes finish
+        # while the Qdrant client is still open
+        stack.push_async_callback(user_memory.aclose)
+
+        tools = []
+        if settings.tavily_api_key:
+            # Tavily takes the key as a query parameter
+            key = quote(settings.tavily_api_key.get_secret_value(), safe="")
+            url = f"{settings.tavily_mcp_url}?tavilyApiKey={key}"
+            tools += await _load_tools(stack, "Tavily", url, TAVILY_TOOLS)
+        if settings.firecrawl_api_key:
+            firecrawl = Client(
+                StreamableHttpTransport(
+                    settings.firecrawl_mcp_url,
+                    auth=settings.firecrawl_api_key.get_secret_value(),
+                )
+            )
+            tools += await _load_tools(stack, "Firecrawl", firecrawl, FIRECRAWL_TOOLS)
+
+        graph = build_graph(llm, messages_store, user_memory, tools)
+
+        return AppRuntime(
+            qdrant=qdrant,
+            messages_store=messages_store,
+            user_memory=user_memory,
+            graph=graph,
+            stack=stack.pop_all(),
+        )
