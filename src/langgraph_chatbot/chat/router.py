@@ -9,7 +9,13 @@ from langgraph_chatbot.chat.deps import ChatServiceDep
 from langgraph_chatbot.chat.utils import make_title
 from langgraph_chatbot.deps import CurrentUser
 from langgraph_chatbot.models.chat import Chat
-from langgraph_chatbot.schemas.chat import ChatRead, ChatUpdate, MessageIn, MessageRead
+from langgraph_chatbot.schemas.chat import (
+    ChatCreate,
+    ChatRead,
+    ChatUpdate,
+    MessageIn,
+    MessageRead,
+)
 
 router = APIRouter(prefix="/chats")
 
@@ -19,6 +25,13 @@ async def list_user_chats(current_user: CurrentUser, service: ChatServiceDep):
     chats = await service.list_chats(current_user.id)
 
     return chats
+
+
+@router.post("", response_model=ChatRead, status_code=201)
+async def create_chat(
+    data: ChatCreate, current_user: CurrentUser, service: ChatServiceDep
+):
+    return await service.create_chat(current_user.id, data.title.strip())
 
 
 @router.get("/{chat_id}", response_model=ChatRead)

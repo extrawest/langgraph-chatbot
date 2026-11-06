@@ -10,6 +10,10 @@ class ChatRead(BaseModel):
     title: str
 
 
+class ChatCreate(BaseModel):
+    title: str = Field(default="New chat", min_length=1, max_length=255)
+
+
 class ChatUpdate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
 
