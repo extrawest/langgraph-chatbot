@@ -102,7 +102,9 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
                     edit_label = gr.Markdown()
                     edit_box = gr.Textbox(show_label=False, container=False)
                     with gr.Row():
-                        edit_ok = gr.Button("✓ Confirm", variant="primary", min_width=60)
+                        edit_ok = gr.Button(
+                            "✓ Confirm", variant="primary", min_width=60
+                        )
                         edit_cancel = gr.Button("Cancel", min_width=60)
                 logout_btn = gr.Button("Log out", size="sm")
 
@@ -165,13 +167,17 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
         voice_btn.click(
             h.voice_open,
             [token, current_chat],
-            [voice_frame, voice_panel, voice_timer],
+            [
+                voice_frame,
+                chats_state,
+                current_chat,
+                voice_panel,
+                voice_timer,
+            ],
         )
         voice_closed.click(
             h.voice_close, None, [voice_frame, voice_panel, voice_timer]
-        ).then(
-            h.select, [token, current_chat, chats_state, histories], SIDEBAR_OUTPUTS
-        )
+        ).then(h.select, [token, current_chat, chats_state, histories], SIDEBAR_OUTPUTS)
         voice_timer.tick(h.poll_chat, [token, current_chat, chatbot], [chatbot])
         demo.load(h.restore, saved_token, SESSION_OUTPUTS)
         demo.load(None, None, None, js=voice_listener_js(api_url))

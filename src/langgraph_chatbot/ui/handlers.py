@@ -253,15 +253,21 @@ class UiHandlers:
                 break
 
     # ------------------------------------------------------------------ voice
-    # outputs: voice_frame, voice_panel, voice_timer
     async def voice_open(self, access_token: str | None, chat_id: str | None):
         if not access_token:
             gr.Warning("Log in first")
-            return noops(3)
+            return noops(5)
 
+        chats = NOOP()
         if not chat_id:
-            chat = await self._api.create_chat(access_token, "Voice chat")
-            chat_id = chat["id"]
+            try:
+                chat = await self._api.create_chat(access_token, "Voice chat")
+                chat_id = chat["id"]
+                chats = await self._api.list_chats(access_token)
+            except ApiError as e:
+                gr.Warning(e.detail)
+                return noops(5)
+
         # fragment (#...) is never sent to a server or written to logs
         fragment = urlencode({"token": access_token, "chat_id": chat_id})
         src = escape(f"{self._api_url}/voice-ui/#{fragment}")
@@ -270,7 +276,7 @@ class UiHandlers:
             'style="width:100%;height:56px;border:0;border-radius:12px">'
             "</iframe>"
         )
-        return frame, gr.Column(visible=True), gr.Timer(active=True)
+        return frame, chats, chat_id, gr.Column(visible=True), gr.Timer(active=True)
 
     def voice_close(self):
         # removing the iframe destroys the page -> LiveKit room disconnects
