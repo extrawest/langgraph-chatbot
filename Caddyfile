@@ -1,0 +1,21 @@
+# Domain comes from the DOMAIN variable in .env.
+# Caddy fetches and renews the TLS certificate from Let's Encrypt by itself.
+{$DOMAIN} {
+	encode gzip
+
+	# The voice page is the only part of the API the browser touches directly:
+	# it is loaded in an iframe and then calls /voice/token on its own origin.
+	handle /voice-ui/* {
+		reverse_proxy api:8000
+	}
+	handle /voice/* {
+		reverse_proxy api:8000
+	}
+
+	# Everything else is Gradio. Note what is missing: the auth and chat
+	# endpoints are never exposed here - the UI reaches them over the private
+	# compose network, so they stay unreachable from the internet.
+	handle {
+		reverse_proxy ui:7860
+	}
+}
