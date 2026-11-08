@@ -1,0 +1,128 @@
+# Production stack: one image, three processes, two stores.
+# Nothing is published to the host yet - the reverse proxy (next step) will be
+# the only service with `ports`.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+
+name: langgraph-chatbot
+
+# Docker's default log driver has no size cap: on a small VPS the disk fills up
+# over weeks and everything dies at once. Cap every container at 30 MB.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Shared by api / ui / worker: same build, same image, one tag between them.
+x-app: &app
+  build:
+    context: .
+  image: langgraph-chatbot:latest
+  env_file: .env
+  restart: unless-stopped
+  logging: *logging
+  environment:
+    # Postgres is a service on this compose network, so a service name is enough.
+    # Composed here so the password lives only in .env, in one place.
+    DB_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    # VECTOR_STORE_URL and VECTOR_STORE_API_KEY come from .env: Qdrant is in the
+    # cloud now, and the api key is what makes the code use the cloud path.
+    LOG_LEVEL: INFO
+    LOG_FORMAT: json
+
+services:
+  # ------------------------------------------------------------------ stores
+  # Qdrant is not here: it is Qdrant Cloud, reached over the internet.
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # failures during the first 30s don't count: a cold data dir takes a while
+      start_period: 30s
+
+  # ------------------------------------------------------------------ proxy
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      DOMAIN: ${DOMAIN}
+    # The only service that publishes anything to the host.
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # caddy_data holds the TLS certificates and the ACME account key.
+      # Without it every restart asks Let's Encrypt for a new certificate and
+      # you hit their weekly rate limit.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - ui
+
+  # -------------------------------------------------------------------- app
+  api:
+    <<: *app
+    command: uvicorn langgraph_chatbot.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health")
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      # build_runtime() connects to the MCP servers at startup; give it room
+      start_period: 40s
+
+  ui:
+    <<: *app
+    command: python -m langgraph_chatbot.ui.app
+    environment:
+      # `<<:` merges top-level keys only: this map REPLACES the x-app one,
+      # it does not merge into it - hence LOG_* repeated here.
+      # DB_URL is left out: the UI never touches the database, it calls the API.
+      # API_URL_PUBLIC comes from env_file, NOT restated here on purpose: an
+      # unset ${VAR} interpolates to "" and would shadow the code's fallback.
+      UI_HOST: 0.0.0.0
+      API_URL_INTERNAL: http://api:8000
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+    depends_on:
+      api:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    # `start`, not `dev`: dev enables hot reload and verbose logs
+    command: python -m langgraph_chatbot.voice.agent start
+    # No depends_on: the worker touches neither Postgres nor any local service.
+    # It reaches Qdrant Cloud and LiveKit over the internet, so it can start
+    # immediately instead of waiting out Postgres' 30s start_period.
+    # The worker may be mid-call on SIGTERM. 10s (the default) is not enough for
+    # ctx.add_shutdown_callback(runtime.aclose) to close MCP clients cleanly.
+    stop_grace_period: 30s
+
+volumes:
+  pg_data:
+  caddy_data:
+  caddy_config:
