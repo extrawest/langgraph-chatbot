@@ -47,6 +47,16 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(voice_router)
 
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    """Liveness probe for Docker and the reverse proxy.
+
+    Deliberately checks nothing downstream: if this pinged Postgres or Qdrant,
+    a blip in either would make Docker restart an otherwise healthy process.
+    """
+    return {"status": "ok"}
+
 app.mount(
     "/voice-ui",
     StaticFiles(directory=Path(__file__).parent / "voice" / "static", html=True),
