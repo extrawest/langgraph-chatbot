@@ -80,7 +80,7 @@ def build_graph(
     workflow.add_node(
         "agent",
         make_agent_node(agent_llm),
-        retry_policy=_custom_retry_on,
+        retry_policy=RetryPolicy(retry_on=_custom_retry_on),
     )
     workflow.add_node(
         "save_user_question", make_save_user_question_node(messages_store, user_memory)
