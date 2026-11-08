@@ -1,7 +1,9 @@
 """Gradio UI: login/register + ChatGPT-like layout (chat list on the left).
 
 Run:  poetry run python -m langgraph_chatbot.ui.app
-Env:  API_URL (default http://127.0.0.1:8000)
+Env:  API_URL_INTERNAL  (default http://127.0.0.1:8000)  this process -> API
+      API_URL_PUBLIC    (default: same as internal)      what the browser loads
+      UI_HOST           (default 127.0.0.1)              0.0.0.0 inside a container
 
 Layout and event wiring only; handler logic lives in handlers.py, pure helpers in helpers.py.
 """
@@ -11,13 +13,25 @@ import logging
 import os
 
 import gradio as gr
+from dotenv import load_dotenv
 
 from langgraph_chatbot.ui.api_client import ApiClient
 from langgraph_chatbot.ui.chat_list import render_chat_list
 from langgraph_chatbot.ui.handlers import UiHandlers
 from langgraph_chatbot.ui.helpers import voice_listener_js
 
-API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+# .env must be loaded before the os.environ reads below. Under compose the
+# values arrive as real environment variables and this call changes nothing.
+load_dotenv()
+
+# Two different addresses, and mixing them up is what breaks voice mode.
+# Internal: this process calling the API. Under compose it is the service name on
+# the private network (http://api:8000), which no browser can resolve.
+API_URL_INTERNAL = os.environ.get("API_URL_INTERNAL", "http://127.0.0.1:8000")
+# Public: what the user's browser loads. The voice page runs in an iframe and its
+# postMessage origin check is derived from this value.
+# Falls back to the internal URL so local dev needs no extra variables.
+API_URL_PUBLIC = os.environ.get("API_URL_PUBLIC", API_URL_INTERNAL)
 
 # Gradio 5 needs type="messages"; Gradio 6 dropped the argument (messages only).
 _CHATBOT_KWARGS = (
@@ -44,11 +58,17 @@ CSS = """
 .chat-row:hover .row-action { opacity: 1; }
 """
 STORAGE_SECRET = os.environ.get("UI_STORAGE_SECRET", "dev-only-change-me")
+# Locally 127.0.0.1, so the dev server is not exposed to the LAN. In a container
+# it must be 0.0.0.0: 127.0.0.1 there is reachable only from that same container.
+UI_HOST = os.environ.get("UI_HOST", "127.0.0.1")
 
 
-def build_ui(api_url: str = API_URL) -> gr.Blocks:
+def build_ui(
+    api_url: str = API_URL_INTERNAL,
+    public_api_url: str = API_URL_PUBLIC,
+) -> gr.Blocks:
     api = ApiClient(api_url)
-    h = UiHandlers(api, api_url)
+    h = UiHandlers(api, public_api_url)
 
     with gr.Blocks(title="LangGraph Chatbot") as demo:
         # per-browser-session state
@@ -180,7 +200,7 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
         ).then(h.select, [token, current_chat, chats_state, histories], SIDEBAR_OUTPUTS)
         voice_timer.tick(h.poll_chat, [token, current_chat, chatbot], [chatbot])
         demo.load(h.restore, saved_token, SESSION_OUTPUTS)
-        demo.load(None, None, None, js=voice_listener_js(api_url))
+        demo.load(None, None, None, js=voice_listener_js(public_api_url))
 
     return demo
 
@@ -188,4 +208,4 @@ def build_ui(api_url: str = API_URL) -> gr.Blocks:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.WARNING)
     logging.getLogger("langgraph_chatbot").setLevel(logging.INFO)
-    build_ui().launch(server_name="127.0.0.1", server_port=7860, css=CSS)
+    build_ui().launch(server_name=UI_HOST, server_port=7860, css=CSS)

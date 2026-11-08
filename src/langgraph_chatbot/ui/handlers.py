@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class UiHandlers:
-    def __init__(self, api: ApiClient, api_url: str) -> None:
+    def __init__(self, api: ApiClient, public_api_url: str) -> None:
         self._api = api
-        self._api_url = api_url
+        self._public_api_url = public_api_url
 
     # ------------------------------------------------------------------ auth
     # outputs: SESSION_OUTPUTS (token, histories, auth_view, chat_view,
@@ -270,7 +270,7 @@ class UiHandlers:
 
         # fragment (#...) is never sent to a server or written to logs
         fragment = urlencode({"token": access_token, "chat_id": chat_id})
-        src = escape(f"{self._api_url}/voice-ui/#{fragment}")
+        src = escape(f"{self._public_api_url}/voice-ui/#{fragment}")
         frame = (
             f'<iframe src="{src}" allow="microphone; autoplay" '
             'style="width:100%;height:56px;border:0;border-radius:12px">'
