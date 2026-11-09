@@ -57,7 +57,8 @@ class UiHandlers:
                 (email or "").strip(), password or ""
             )
         except ApiError as exc:
-            return f"⚠️ {exc.detail}"
+            # wired to SESSION_OUTPUTS like login: only auth_msg changes
+            return (*noops(4), f"⚠️ {exc.detail}", *noops(SIDEBAR_SIZE + 1))
         return await self._session(access_token)
 
     def logout(self):

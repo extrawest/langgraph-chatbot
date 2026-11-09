@@ -104,11 +104,6 @@ async def test_register_success_logs_in(h, api):
     assert_logged_in(result)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: register() is wired to SESSION_OUTPUTS (9 outputs) in app.py but its "
-    "error path returns a single string, so Gradio errors instead of showing the message",
-)
 async def test_register_failure_matches_session_outputs(h, api):
     api.register.side_effect = ApiError(409, "Email already registered")
 
