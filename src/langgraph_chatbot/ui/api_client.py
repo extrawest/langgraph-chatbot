@@ -66,9 +66,10 @@ class ApiClient:
 
     # --- auth ---------------------------------------------------------------
     async def register(self, email: str, password: str) -> None:
-        await self._request(
+        data = await self._request(
             "POST", "/auth/register", json={"email": email, "password": password}
         )
+        return data["access_token"]
 
     async def login(self, email: str, password: str) -> str:
         # OAuth2 Password Flow: form-data, and the field is called "username"

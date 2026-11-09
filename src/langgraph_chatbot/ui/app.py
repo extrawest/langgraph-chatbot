@@ -165,7 +165,7 @@ def build_ui(
         }
         login_btn.click(**login_args).then(lambda t: t, token, saved_token)
         login_password.submit(**login_args).then(lambda t: t, token, saved_token)
-        reg_btn.click(h.register, [reg_email, reg_password], [auth_msg])
+        reg_btn.click(h.register, [reg_email, reg_password], SESSION_OUTPUTS)
         logout_btn.click(h.logout, None, SESSION_OUTPUTS).then(
             lambda: None, None, saved_token
         )

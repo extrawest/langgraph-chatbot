@@ -53,10 +53,12 @@ class UiHandlers:
 
     async def register(self, email: str, password: str):
         try:
-            await self._api.register((email or "").strip(), password or "")
+            access_token = await self._api.register(
+                (email or "").strip(), password or ""
+            )
         except ApiError as exc:
             return f"⚠️ {exc.detail}"
-        return "✅ Account created - now log in on the first tab"
+        return await self._session(access_token)
 
     def logout(self):
         return (

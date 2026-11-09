@@ -42,12 +42,21 @@ async def read_users_me(current_user: CurrentUser):
     return current_user
 
 
-@router.post("/register", response_model=UserRead, status_code=201)
-async def register(data: UserCreate, auth_service: AuthServiceDep):
+@router.post("/register", status_code=201)
+async def register(
+    data: UserCreate,
+    auth_service: AuthServiceDep,
+    settings: SettingsDep,
+):
     try:
         user = await auth_service.register(data.email, data.password)
-        response = UserRead.model_validate(user)
-        return response
+        encoded_jwt = create_access_token(
+            {"sub": str(user.id)},
+            settings.jwt_secret,
+            settings.jwt_algorithm,
+            expires_delta=timedelta(minutes=settings.access_token_ttl_minutes),
+        )
+        return {"access_token": encoded_jwt, "token_type": "bearer"}
     except EmailAlreadyExists:
         raise HTTPException(
             status_code=409,
