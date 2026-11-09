@@ -177,6 +177,25 @@ Open http://127.0.0.1:7860.
 > Voice mode needs HTTPS to reach the microphone, so it works on `localhost` (browsers
 > treat it as a secure context) and on the deployed domain, but not over a bare LAN IP.
 
+## Tests
+
+```bash
+poetry run pytest                  # whole suite, ~10 s
+poetry run pytest --cov            # with line + branch coverage
+```
+
+The suite is hermetic: no Docker, API keys or network. Postgres is replaced by SQLite in
+memory, Qdrant by `qdrant-client`'s local mode, the LLM by a scripted fake model, and
+`.env` is never loaded (LangSmith tracing is forced off).
+
+- `tests/unit/` — pure logic, graph nodes, the full LangGraph graph, UI handlers and client
+- `tests/integration/` — repositories, `ChatService`, `MessagesStore` (tenant isolation)
+- `tests/api/` — every HTTP endpoint through the real FastAPI app, plus contract tests that
+  run the UI's `ApiClient` against it
+
+Tests marked `xfail(strict=True)` pin known bugs; when one is fixed, its test starts
+passing and pytest reports it, so the marker can be removed.
+
 ## Deployment
 
 One image, three processes, behind Caddy. On any Docker host with ports 80 and 443 open
