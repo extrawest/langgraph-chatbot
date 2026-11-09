@@ -76,15 +76,11 @@ async def test_authenticate(auth, user_factory):
     assert await auth.authenticate_user("ghost@example.com", DEFAULT_PASSWORD) is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: register() lower-cases/strips the email but authenticate_user() does "
-    "not, so 'Me@Example.com' can register but never log in with the same spelling",
-)
 async def test_authenticate_uses_same_normalization_as_register(auth):
     await auth.register("Me@Example.com", "pw-123456")
 
     assert await auth.authenticate_user("Me@Example.com", "pw-123456") is not None
+    assert await auth.authenticate_user("  ME@example.COM ", "pw-123456") is not None
 
 
 async def test_get_user_normalizes(auth, user_factory):

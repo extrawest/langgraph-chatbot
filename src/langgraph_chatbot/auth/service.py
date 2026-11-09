@@ -7,18 +7,22 @@ from langgraph_chatbot.models.user import User
 from langgraph_chatbot.users.repository import UserRepository
 
 
+def normalize_email(email: str) -> str:
+    """Single rule for every lookup and insert: emails are stored lower-cased."""
+    return email.lower().strip()
+
+
 class AuthService:
     def __init__(self, session: AsyncSession, repo: UserRepository) -> None:
         self._session = session
         self._repo = repo
 
     async def get_user(self, email: str):
-        email = email.lower().strip()
-        user = await self._repo.get_by_email(email)
+        user = await self._repo.get_by_email(normalize_email(email))
         return user
 
     async def authenticate_user(self, email: str, password: str):
-        user = await self._repo.get_by_email(email)
+        user = await self._repo.get_by_email(normalize_email(email))
         if not user:
             return None
         if not verify_password(password, user.hashed_password):
@@ -27,7 +31,7 @@ class AuthService:
 
     async def register(self, email: str, password: str) -> User:
         user = User(
-            email=email.lower().strip(),
+            email=normalize_email(email),
             hashed_password=get_password_hash(password),
         )
         await self._repo.add(user)
