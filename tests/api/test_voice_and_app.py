@@ -141,13 +141,19 @@ def test_get_settings_is_cached(monkeypatch, settings):
         config.get_settings.cache_clear()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG (latent, not used by any route yet): get_current_active_user raises "
-    "'Inactive user' for ACTIVE users - the condition is inverted",
-)
 async def test_get_current_active_user_dependency(alice):
     from langgraph_chatbot.deps import get_current_active_user
 
     assert await get_current_active_user(alice) is alice
 
+
+async def test_get_current_active_user_rejects_inactive(user_factory):
+    from fastapi import HTTPException
+
+    from langgraph_chatbot.deps import get_current_active_user
+
+    inactive = await user_factory(is_active=False)
+
+    with pytest.raises(HTTPException) as err:
+        await get_current_active_user(inactive)
+    assert (err.value.status_code, err.value.detail) == (400, "Inactive user")
