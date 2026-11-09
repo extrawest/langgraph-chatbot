@@ -80,9 +80,16 @@ class ChatService:
         await self._session.refresh(chat)
         return chat
 
-    async def delete_chat(self, chat_id: uuid.UUID, user_id: uuid.UUID) -> None:
-        await self._repo.delete(chat_id, user_id)
+    async def delete_chat(self, chat_id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        """Delete the chat and its message history. False if it is not the user's."""
+        if not await self._repo.delete(chat_id, user_id):
+            return False
         await self._session.commit()
+        # Postgres first: once the row is gone the chat is unreachable, so if Qdrant
+        # fails below, the leftover points are orphans nobody can read (the chat_id is
+        # a fresh UUID and every read is scoped by it), not a half-deleted visible chat.
+        await self._messages_store.delete_chat(user_id=user_id, chat_id=chat_id)
+        return True
 
     async def get_messages(
         self, chat_id: uuid.UUID, user_id: uuid.UUID, limit: int = 100

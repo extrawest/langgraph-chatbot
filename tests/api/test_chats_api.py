@@ -29,6 +29,7 @@ def as_alice(alice, auth_headers):
         ("POST", "/chats"),
         ("GET", f"/chats/{uuid.uuid4()}"),
         ("PATCH", f"/chats/{uuid.uuid4()}"),
+        ("DELETE", f"/chats/{uuid.uuid4()}"),
         ("GET", f"/chats/{uuid.uuid4()}/messages"),
         ("POST", "/chats/messages"),
     ],
@@ -129,6 +130,47 @@ async def test_messages(client, as_alice, alice, chat_factory, messages_store):
 async def test_whitespace_title_is_stripped_before_saving(client, as_alice):
     response = await client.post("/chats", json={"title": " \t Notes \n"}, headers=as_alice)
     assert response.json()["title"] == "Notes"
+
+
+# ------------------------------------------------------------------ delete
+async def test_delete_chat_removes_it_and_its_messages(
+    client, as_alice, alice, chat_factory, messages_store
+):
+    doomed = await chat_factory(alice, "doomed")
+    kept = await chat_factory(alice, "kept")
+    for chat in (doomed, kept):
+        await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi")
+
+    response = await client.delete(f"/chats/{doomed.id}", headers=as_alice)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert [c["id"] for c in (await client.get("/chats", headers=as_alice)).json()] == [str(kept.id)]
+    assert (await client.get(f"/chats/{doomed.id}", headers=as_alice)).status_code == 404
+    assert await messages_store.recent(user_id=alice.id, chat_id=doomed.id) == []
+    assert len(await messages_store.recent(user_id=alice.id, chat_id=kept.id)) == 1
+
+
+async def test_delete_missing_chat(client, as_alice):
+    response = await client.delete(f"/chats/{uuid.uuid4()}", headers=as_alice)
+    assert (response.status_code, response.json()) == (404, {"detail": "Chat not found"})
+
+
+async def test_cannot_delete_someone_elses_chat(client, as_alice, bob, chat_factory, messages_store, auth_headers):
+    chat = await chat_factory(bob)
+    await messages_store.add(user_id=bob.id, chat_id=chat.id, turn_id="t", role="user", content="bob's")
+
+    response = await client.delete(f"/chats/{chat.id}", headers=as_alice)
+
+    assert response.status_code == 404
+    assert (await client.get(f"/chats/{chat.id}", headers=auth_headers(bob))).status_code == 200
+    assert len(await messages_store.recent(user_id=bob.id, chat_id=chat.id)) == 1
+
+
+async def test_delete_twice(client, as_alice, alice, chat_factory):
+    chat = await chat_factory(alice)
+    assert (await client.delete(f"/chats/{chat.id}", headers=as_alice)).status_code == 204
+    assert (await client.delete(f"/chats/{chat.id}", headers=as_alice)).status_code == 404
 
 
 # --------------------------------------------------------- send (SSE stream)

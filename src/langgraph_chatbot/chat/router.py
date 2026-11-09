@@ -67,6 +67,14 @@ async def rename_chat(
     return chat
 
 
+@router.delete("/{chat_id}", status_code=204)
+async def delete_chat(
+    chat_id: uuid.UUID, current_user: CurrentUser, service: ChatServiceDep
+) -> None:
+    if not await service.delete_chat(chat_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+
 async def get_chat_for_message(
     data: MessageIn, current_user: CurrentUser, service: ChatServiceDep
 ) -> Chat:

@@ -71,15 +71,12 @@ async def test_stream_message_missing_chat(api, token):
     assert (err.value.status_code, err.value.detail) == (404, "Chat not found")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: the UI's delete button calls DELETE /chats/{id}, but the backend has no "
-    "such route (ChatService.delete_chat exists, it is never exposed; Qdrant messages "
-    "would also need MessagesStore.delete_chat)",
-)
 async def test_delete_chat(api, token):
     chat = await api.create_chat(token, "Doomed")
 
     await api.delete_chat(token, chat["id"])
 
     assert await api.list_chats(token) == []
+    with pytest.raises(ApiError) as err:
+        await api.delete_chat(token, chat["id"])
+    assert (err.value.status_code, err.value.detail) == (404, "Chat not found")

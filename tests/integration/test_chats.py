@@ -1,6 +1,7 @@
 """ChatRepository + ChatService (non-streaming parts) against SQLite + in-memory Qdrant."""
 
 import uuid
+from unittest.mock import AsyncMock
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -58,17 +59,17 @@ async def test_list_for_user_empty(repo, alice):
 async def test_delete_only_own_chat(repo, session, chat_factory, alice, bob):
     chat = await chat_factory(alice)
 
-    await repo.delete(chat.id, bob.id)  # not bob's: no-op
+    assert await repo.delete(chat.id, bob.id) is False  # not bob's: no-op
     await session.commit()
     assert await repo.get_by_id(chat.id, alice.id) is not None
 
-    await repo.delete(chat.id, alice.id)
+    assert await repo.delete(chat.id, alice.id) is True
     await session.commit()
     assert await repo.get_by_id(chat.id, alice.id) is None
 
 
 async def test_delete_missing_chat_is_noop(repo, alice):
-    await repo.delete(uuid.uuid4(), alice.id)
+    assert await repo.delete(uuid.uuid4(), alice.id) is False
 
 
 # ----------------------------------------------------------------- service
@@ -107,11 +108,37 @@ async def test_rename_someone_elses_chat(service, chat_factory, alice, bob):
     assert (await service.get_chat(chat.id, alice.id)).title == "mine"
 
 
-async def test_delete_chat(service, chat_factory, alice):
+async def test_delete_chat_removes_row_and_messages(service, messages_store, sessionmaker, chat_factory, alice):
+    chat = await chat_factory(alice)
+    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi")
+
+    assert await service.delete_chat(chat.id, alice.id) is True
+
+    async with sessionmaker() as other:  # committed, not just flushed
+        assert await other.get(Chat, chat.id) is None
+    assert await messages_store.recent(user_id=alice.id, chat_id=chat.id) == []
+
+
+async def test_delete_someone_elses_chat_touches_nothing(service, messages_store, chat_factory, alice, bob):
+    chat = await chat_factory(alice)
+    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi")
+
+    assert await service.delete_chat(chat.id, bob.id) is False
+
+    assert await service.get_chat(chat.id, alice.id) is not None
+    assert len(await messages_store.recent(user_id=alice.id, chat_id=chat.id)) == 1
+
+
+async def test_delete_chat_qdrant_failure_still_removes_the_chat(session, repo, fake_graph, chat_factory, alice):
+    store = AsyncMock()
+    store.delete_chat.side_effect = ConnectionError("qdrant down")
+    service = ChatService(session, repo, fake_graph, store)
     chat = await chat_factory(alice)
 
-    await service.delete_chat(chat.id, alice.id)
+    with pytest.raises(ConnectionError):
+        await service.delete_chat(chat.id, alice.id)
 
+    # the row is already committed: the user never sees a half-deleted chat
     assert await service.get_chat(chat.id, alice.id) is None
 
 

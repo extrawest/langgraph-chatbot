@@ -32,9 +32,11 @@ class ChatRepository:
         await self._session.flush()
         return chat
 
-    async def delete(self, id: uuid.UUID, user_id: uuid.UUID) -> None:
+    async def delete(self, id: uuid.UUID, user_id: uuid.UUID) -> bool:
+        """True if the chat existed (and belonged to the user) and was deleted."""
         chat = await self.get_by_id(id, user_id)
         if not chat:
-            return
+            return False
 
         await self._session.delete(chat)
+        return True
