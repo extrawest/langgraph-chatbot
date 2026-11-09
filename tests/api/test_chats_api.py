@@ -64,11 +64,6 @@ async def test_create_validates_title(client, as_alice, title):
     assert (await client.post("/chats", json={"title": title}, headers=as_alice)).status_code == 422
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: min_length is checked before .strip(), so a whitespace-only title "
-    "passes validation and is saved as an empty string",
-)
 @pytest.mark.parametrize("method", ["POST", "PATCH"])
 async def test_whitespace_only_title_is_rejected(client, as_alice, alice, chat_factory, method):
     chat = await chat_factory(alice)
@@ -129,6 +124,11 @@ async def test_messages(client, as_alice, alice, chat_factory, messages_store):
 
     response = await client.get(f"/chats/{chat.id}/messages", headers=as_alice)
     assert response.json() == [{"role": "user", "content": "hi"}]
+
+
+async def test_whitespace_title_is_stripped_before_saving(client, as_alice):
+    response = await client.post("/chats", json={"title": " \t Notes \n"}, headers=as_alice)
+    assert response.json()["title"] == "Notes"
 
 
 # --------------------------------------------------------- send (SSE stream)

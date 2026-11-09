@@ -31,7 +31,7 @@ async def list_user_chats(current_user: CurrentUser, service: ChatServiceDep):
 async def create_chat(
     data: ChatCreate, current_user: CurrentUser, service: ChatServiceDep
 ):
-    return await service.create_chat(current_user.id, data.title.strip())
+    return await service.create_chat(current_user.id, data.title)
 
 
 @router.get("/{chat_id}", response_model=ChatRead)

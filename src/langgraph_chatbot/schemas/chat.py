@@ -1,6 +1,12 @@
 import uuid
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, StringConstraints
+
+# stripped before the length check, so "   " is rejected instead of saved as ""
+ChatTitle = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
 
 
 class ChatRead(BaseModel):
@@ -11,11 +17,11 @@ class ChatRead(BaseModel):
 
 
 class ChatCreate(BaseModel):
-    title: str = Field(default="New chat", min_length=1, max_length=255)
+    title: ChatTitle = "New chat"
 
 
 class ChatUpdate(BaseModel):
-    title: str = Field(min_length=1, max_length=255)
+    title: ChatTitle
 
 
 class MessageIn(BaseModel):
