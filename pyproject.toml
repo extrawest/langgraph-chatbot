@@ -40,3 +40,30 @@ packages = [{include = "langgraph_chatbot", from = "src"}]
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.2.0,<10.0.0)",
+    "pytest-asyncio (>=1.4.1.post1,<2.0.0)",
+    "pytest-cov (>=7.1.0,<8.0.0)",
+    "aiosqlite (>=0.22.1,<0.23.0)"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    # Qdrant local (in-memory) mode ignores payload indexes and says so on every call
+    "ignore:Payload indexes have no effect in the local Qdrant:UserWarning",
+]
+
+[tool.coverage.run]
+source = ["langgraph_chatbot"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if __name__ == .__main__.:"]
