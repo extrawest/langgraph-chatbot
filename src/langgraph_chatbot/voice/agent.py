@@ -63,7 +63,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     session = AgentSession(
         vad=silero.VAD.load(),
-        stt=elevenlabs.STT(model="scribe_v2_realtime", language_code="ru"),
+        stt=elevenlabs.STT(model="scribe_v2_realtime"),
         llm=langchain.LLMAdapter(
             graph=SpokenOnly(runtime.graph),
             context=ContextSchema(
@@ -72,7 +72,7 @@ async def entrypoint(ctx: agents.JobContext):
                 mode=Mode.VOICE,
             ),
         ),
-        tts=elevenlabs.TTS(voice_id=settings.eleven_voice_id, language="ru"),
+        tts=elevenlabs.TTS(voice_id=settings.eleven_voice_id),
         turn_handling=TurnHandlingOptions(turn_detection=inference.TurnDetector()),
     )
 
