@@ -1,0 +1,59 @@
+name: evals
+
+# Deliberately NOT on push. Evaluations call paid APIs and score a non-deterministic
+# system: the same commit can swing several points between runs, so gating every push
+# on them would spend money to produce red builds nobody trusts.
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Suite to run (tools, memory, isolation, voice, all)"
+        default: all
+  schedule:
+    # Mondays, 03:00 UTC
+    - cron: "0 3 * * 1"
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Cache the virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py314-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        env:
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: poetry install --no-interaction
+
+      - name: Run evaluations
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_ENDPOINT: ${{ secrets.LANGSMITH_ENDPOINT }}
+          LANGSMITH_TRACING: "true"
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          VECTOR_STORE_URL: ${{ secrets.VECTOR_STORE_URL }}
+          VECTOR_STORE_API_KEY: ${{ secrets.VECTOR_STORE_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          # Settings has no defaults for these and refuses to build without them,
+          # even though an evaluation run never touches Postgres, LiveKit or TTS.
+          DB_URL: postgresql+asyncpg://unused:unused@localhost:5432/unused
+          JWT_SECRET: unused-in-evals
+          LIVEKIT_URL: wss://unused.livekit.cloud
+          ELEVEN_VOICE_ID: unused
+        run: >
+          poetry run python -m evals.run
+          --suite ${{ inputs.suite || 'all' }}
+          --label ci-${{ github.sha }}
