@@ -259,6 +259,32 @@ to get wrong:
 
 Interactive docs at `/docs`.
 
+## Evaluation
+
+Tracing records what happened; evaluation says whether it was any good. Four suites
+live in [`evals/`](evals/), and most of their checks are deterministic — the
+properties this project claims turn out to be testable without a judge model.
+
+| Suite | Dataset | What it pins down |
+|---|---|---|
+| `tools` | `chatbot-tool-routing` | Searches only for fresh external facts, reads a given URL instead of searching for it, answers in the user's language |
+| `memory` | `chatbot-cross-chat-memory` | A fact stated in one chat surfaces in a *different* chat |
+| `isolation` | `chatbot-tenant-isolation` | One user's content never reaches another user's answer |
+| `voice` | `chatbot-voice-filter` | `SpokenOnly` hands TTS agent tokens and nothing else |
+
+```bash
+poetry run python -m evals.run --suite all --sync
+poetry run python -m evals.run --suite tools --label prompt-v3   # then compare in the UI
+```
+
+Every run mints fresh tenant ids, so a run never recalls what an earlier run wrote —
+otherwise the memory suite would start passing for the wrong reason. `--cleanup`
+removes the run's vectors afterwards.
+
+Only two evaluators use an LLM as judge (`grounded`, `correct`); the rest are plain
+Python functions over the tool calls and the answer text. Results land in LangSmith as
+experiments, which is where two runs get compared example by example.
+
 ## Design decisions
 
 **Qdrant is the source of truth for messages, not a LangGraph checkpointer.**
