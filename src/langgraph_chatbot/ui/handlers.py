@@ -51,10 +51,12 @@ class UiHandlers:
             )
             return (*noops(4), f"⚠️ {detail}", *noops(SIDEBAR_SIZE + 1))
 
-    async def register(self, email: str, password: str):
+    async def register(self, email: str, password: str, confirm_password: str):
         try:
             access_token = await self._api.register(
-                (email or "").strip(), password or ""
+                (email or "").strip(),
+                password or "",
+                confirm_password or "",
             )
         except ApiError as exc:
             # wired to SESSION_OUTPUTS like login: only auth_msg changes

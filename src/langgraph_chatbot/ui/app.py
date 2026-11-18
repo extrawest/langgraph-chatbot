@@ -93,7 +93,12 @@ def build_ui(
                 with gr.Tab("Register"):
                     reg_email = gr.Textbox(label="Email")
                     reg_password = gr.Textbox(
-                        label="Password", type="password", info="At least 8 characters"
+                        label="Password",
+                        type="password",
+                        info="8-20 characters, 1 digit, and 1 symbol",
+                    )
+                    reg_confirm_password = gr.Textbox(
+                        label="Confirm password", type="password"
                     )
                     reg_btn = gr.Button("Create account")
             auth_msg = gr.Markdown()
@@ -165,7 +170,9 @@ def build_ui(
         }
         login_btn.click(**login_args).then(lambda t: t, token, saved_token)
         login_password.submit(**login_args).then(lambda t: t, token, saved_token)
-        reg_btn.click(h.register, [reg_email, reg_password], SESSION_OUTPUTS)
+        reg_btn.click(
+            h.register, [reg_email, reg_password, reg_confirm_password], SESSION_OUTPUTS
+        )
         logout_btn.click(h.logout, None, SESSION_OUTPUTS).then(
             lambda: None, None, saved_token
         )

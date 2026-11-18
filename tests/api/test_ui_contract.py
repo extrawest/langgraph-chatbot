@@ -14,14 +14,16 @@ from langgraph_chatbot.ui.api_client import ApiClient, ApiError
 @pytest.fixture
 async def api(app):
     api = ApiClient("http://test")
-    api._client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+    api._client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    )
     yield api
     await api._client.aclose()
 
 
 @pytest.fixture
 async def token(api):
-    return await api.register("ui@example.com", "pw-123456")
+    return await api.register("ui@example.com", "pw-123456", "pw-123456")
 
 
 async def test_register_login_me(api, token):
@@ -35,12 +37,15 @@ async def test_register_login_me(api, token):
 async def test_login_error_detail(api, token):
     with pytest.raises(ApiError) as err:
         await api.login("ui@example.com", "wrong")
-    assert (err.value.status_code, err.value.detail) == (401, "Incorrect username or password")
+    assert (err.value.status_code, err.value.detail) == (
+        401,
+        "Incorrect username or password",
+    )
 
 
 async def test_validation_error_detail_is_readable(api):
     with pytest.raises(ApiError) as err:
-        await api.register("not-an-email", "pw")
+        await api.register("not-an-email", "pw", "pw")
     assert err.value.status_code == 422
     assert "email" in err.value.detail.lower()
 
@@ -55,7 +60,10 @@ async def test_chat_lifecycle(api, token):
 
 
 async def test_stream_message(api, token, fake_graph):
-    fake_graph.script = [(AIMessageChunk("Hi"), "agent"), (AIMessageChunk("!"), "agent")]
+    fake_graph.script = [
+        (AIMessageChunk("Hi"), "agent"),
+        (AIMessageChunk("!"), "agent"),
+    ]
 
     events = [e async for e in api.stream_message("hello", None, token=token)]
 
@@ -67,7 +75,12 @@ async def test_stream_message(api, token, fake_graph):
 
 async def test_stream_message_missing_chat(api, token):
     with pytest.raises(ApiError) as err:
-        [e async for e in api.stream_message("hi", "00000000-0000-0000-0000-000000000000", token=token)]
+        [
+            e
+            async for e in api.stream_message(
+                "hi", "00000000-0000-0000-0000-000000000000", token=token
+            )
+        ]
     assert (err.value.status_code, err.value.detail) == (404, "Chat not found")
 
 

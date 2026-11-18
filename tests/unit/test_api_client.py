@@ -19,7 +19,9 @@ def make_client(handler) -> tuple[ApiClient, list[httpx.Request]]:
         return handler(request)
 
     api = ApiClient(BASE + "/")
-    api._client = httpx.AsyncClient(base_url=BASE, transport=httpx.MockTransport(recording))
+    api._client = httpx.AsyncClient(
+        base_url=BASE, transport=httpx.MockTransport(recording)
+    )
     return api, seen
 
 
@@ -33,7 +35,12 @@ def json_response(status=200, body=None):
     [
         (httpx.Response(404, json={"detail": "Chat not found"}), "Chat not found"),
         (
-            httpx.Response(422, json={"detail": [{"msg": "field required"}, {"msg": "too short"}, "raw"]}),
+            httpx.Response(
+                422,
+                json={
+                    "detail": [{"msg": "field required"}, {"msg": "too short"}, "raw"]
+                },
+            ),
             "field required; too short; raw",
         ),
         (httpx.Response(502, text="Bad gateway from proxy"), "Bad gateway from proxy"),
@@ -112,7 +119,9 @@ async def test_empty_body_returns_none():
 
 # --------------------------------------------------------------- endpoints
 async def test_login_uses_oauth2_form_fields():
-    api, seen = make_client(json_response(body={"access_token": "jwt", "token_type": "bearer"}))
+    api, seen = make_client(
+        json_response(body={"access_token": "jwt", "token_type": "bearer"})
+    )
 
     assert await api.login("me@x.io", "pw") == "jwt"
 
@@ -125,16 +134,30 @@ async def test_login_uses_oauth2_form_fields():
 async def test_register_returns_token():
     api, seen = make_client(json_response(201, {"access_token": "new-jwt"}))
 
-    assert await api.register("me@x.io", "pw") == "new-jwt"
-    assert json.loads(seen[0].content) == {"email": "me@x.io", "password": "pw"}
+    assert await api.register("me@x.io", "pw", "pw") == "new-jwt"
+    assert json.loads(seen[0].content) == {
+        "email": "me@x.io",
+        "password": "pw",
+        "confirm_password": "pw",
+    }
 
 
 @pytest.mark.parametrize(
     ("call", "method", "path", "body"),
     [
         (lambda api: api.me("t"), "GET", "/auth/users/me", None),
-        (lambda api: api.create_chat("t", "Title"), "POST", "/chats", {"title": "Title"}),
-        (lambda api: api.rename_chat("t", "c1", "New"), "PATCH", "/chats/c1", {"title": "New"}),
+        (
+            lambda api: api.create_chat("t", "Title"),
+            "POST",
+            "/chats",
+            {"title": "Title"},
+        ),
+        (
+            lambda api: api.rename_chat("t", "c1", "New"),
+            "PATCH",
+            "/chats/c1",
+            {"title": "New"},
+        ),
         (lambda api: api.get_messages("t", "c1"), "GET", "/chats/c1/messages", None),
     ],
 )
@@ -179,7 +202,9 @@ SSE_BODY = (
 
 async def test_stream_message_parses_sse_events():
     api, seen = make_client(
-        lambda r: httpx.Response(200, text=SSE_BODY, headers={"content-type": "text/event-stream"})
+        lambda r: httpx.Response(
+            200, text=SSE_BODY, headers={"content-type": "text/event-stream"}
+        )
     )
 
     events = [e async for e in api.stream_message("hello", None, token="tok")]

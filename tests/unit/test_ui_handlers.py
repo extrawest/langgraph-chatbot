@@ -60,7 +60,9 @@ async def test_restore_with_expired_token(h, api):
     assert await h.restore("old") == noops(SESSION_SIZE)
 
 
-@pytest.mark.parametrize(("email", "password"), [("", "pw"), ("   ", "pw"), (None, "pw"), ("a@b.c", "")])
+@pytest.mark.parametrize(
+    ("email", "password"), [("", "pw"), ("   ", "pw"), (None, "pw"), ("a@b.c", "")]
+)
 async def test_login_requires_both_fields(h, api, email, password):
     result = await h.login(email, password)
 
@@ -81,7 +83,10 @@ async def test_login_success(h, api):
 @pytest.mark.parametrize(
     ("error", "message"),
     [
-        (ApiError(401, "Incorrect username or password"), "⚠️ Incorrect email or password"),
+        (
+            ApiError(401, "Incorrect username or password"),
+            "⚠️ Incorrect email or password",
+        ),
         (ApiError(0, "Backend is unreachable"), "⚠️ Backend is unreachable"),
     ],
 )
@@ -98,16 +103,16 @@ async def test_login_failure(h, api, error, message):
 async def test_register_success_logs_in(h, api):
     api.register.return_value = "tok"
 
-    result = await h.register(" me@example.com ", "pw")
+    result = await h.register(" me@example.com ", "pw", "pw")
 
-    api.register.assert_awaited_once_with("me@example.com", "pw")
+    api.register.assert_awaited_once_with("me@example.com", "pw", "pw")
     assert_logged_in(result)
 
 
 async def test_register_failure_matches_session_outputs(h, api):
     api.register.side_effect = ApiError(409, "Email already registered")
 
-    result = await h.register("me@example.com", "pw")
+    result = await h.register("me@example.com", "pw", "pw")
 
     assert isinstance(result, tuple) and len(result) == SESSION_SIZE
     assert result[4] == "⚠️ Email already registered"
@@ -184,16 +189,26 @@ async def test_confirm_edit_without_target(h, api):
 async def test_confirm_rename(h, api):
     hist = {"c1": ["m"]}
 
-    result = await h.confirm_edit("tok", {"mode": "rename", "id": "c1"}, "  New name ", "c1", hist)
+    result = await h.confirm_edit(
+        "tok", {"mode": "rename", "id": "c1"}, "  New name ", "c1", hist
+    )
 
     api.rename_chat.assert_awaited_once_with("tok", "c1", "New name")
     chats, current, chatbot, histories, target, panel = result
-    assert (chats, current, chatbot, histories, target) == (CHATS, "c1", ["m"], hist, None)
+    assert (chats, current, chatbot, histories, target) == (
+        CHATS,
+        "c1",
+        ["m"],
+        hist,
+        None,
+    )
     assert panel.visible is False
 
 
 async def test_confirm_rename_rejects_blank_title(h, api, warnings):
-    result = await h.confirm_edit("tok", {"mode": "rename", "id": "c1"}, "   ", None, {})
+    result = await h.confirm_edit(
+        "tok", {"mode": "rename", "id": "c1"}, "   ", None, {}
+    )
 
     assert result == noops(SIDEBAR_SIZE + 3)  # panel stays open
     assert warnings == ["Enter a non-empty title"]
@@ -225,7 +240,9 @@ async def test_confirm_delete_of_open_chat_clears_selection(h, api):
 async def test_confirm_delete_of_other_chat_keeps_open_one(h, api):
     api.list_chats.return_value = [CHATS[1]]
 
-    result = await h.confirm_edit("tok", {"mode": "delete", "id": "c1"}, "", "c2", {"c2": ["b"]})
+    result = await h.confirm_edit(
+        "tok", {"mode": "delete", "id": "c1"}, "", "c2", {"c2": ["b"]}
+    )
 
     assert result[:3] == ([CHATS[1]], "c2", ["b"])
 
@@ -285,7 +302,12 @@ async def test_send_streams_answer_into_new_chat(h, api):
 
     api.stream_message.assert_called_once_with("hi", None, token="tok")
     # first yield shows the question and an empty answer bubble, input cleared
-    assert outputs[0] == ([{"role": "user", "content": "hi"}, {"role": "assistant", "content": ""}], "", None, {})
+    assert outputs[0] == (
+        [{"role": "user", "content": "hi"}, {"role": "assistant", "content": ""}],
+        "",
+        None,
+        {},
+    )
     final_history, msg, chat_id, hist = outputs[-1]
     assert final_history[-1] == {"role": "assistant", "content": "Hello"}
     assert (msg, chat_id) == ("", "new-id")
@@ -334,15 +356,32 @@ async def test_send_api_error_replaces_answer(h, api):
 
 def test_tool_done_marks_only_first_pending_of_that_name():
     history = [
-        {"role": "assistant", "content": "", "metadata": {"title": "a", "status": "done"}},
-        {"role": "assistant", "content": "", "metadata": {"title": "a", "status": "pending"}},
-        {"role": "assistant", "content": "", "metadata": {"title": "a", "status": "pending"}},
+        {
+            "role": "assistant",
+            "content": "",
+            "metadata": {"title": "a", "status": "done"},
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "metadata": {"title": "a", "status": "pending"},
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "metadata": {"title": "a", "status": "pending"},
+        },
         {"role": "assistant", "content": ""},
     ]
 
     UiHandlers._apply_tool_event(history, {"name": "a", "status": "done"})
 
-    assert [m.get("metadata", {}).get("status") for m in history] == ["done", "done", "pending", None]
+    assert [m.get("metadata", {}).get("status") for m in history] == [
+        "done",
+        "done",
+        "pending",
+        None,
+    ]
 
 
 def test_tool_done_without_matching_start_is_ignored():

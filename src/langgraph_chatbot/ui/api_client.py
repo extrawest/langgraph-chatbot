@@ -65,9 +65,15 @@ class ApiClient:
         return response.json() if response.content else None
 
     # --- auth ---------------------------------------------------------------
-    async def register(self, email: str, password: str) -> None:
+    async def register(self, email: str, password: str, confirm_password) -> None:
         data = await self._request(
-            "POST", "/auth/register", json={"email": email, "password": password}
+            "POST",
+            "/auth/register",
+            json={
+                "email": email,
+                "password": password,
+                "confirm_password": confirm_password,
+            },
         )
         return data["access_token"]
 
