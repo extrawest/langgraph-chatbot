@@ -6,6 +6,7 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
+    JobProcess,
     TurnHandlingOptions,
     inference,
 )
@@ -36,6 +37,13 @@ class Assistant(Agent):
 server = AgentServer()
 
 
+def prewarm(proc: JobProcess):
+    proc.userdata["vad"] = silero.VAD.load()
+
+
+server.setup_fnc = prewarm
+
+
 @server.rtc_session(agent_name=VOICE_AGENT_NAME)
 async def entrypoint(ctx: agents.JobContext):
     await ctx.connect()
@@ -62,7 +70,7 @@ async def entrypoint(ctx: agents.JobContext):
         return
 
     session = AgentSession(
-        vad=silero.VAD.load(),
+        vad=ctx.proc.userdata["vad"],
         stt=elevenlabs.STT(model="scribe_v2_realtime"),
         llm=langchain.LLMAdapter(
             graph=SpokenOnly(runtime.graph),
