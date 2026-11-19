@@ -1,0 +1,45 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Cache the virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py314-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        env:
+          POETRY_VIRTUALENVS_IN_PROJECT: "true"
+        run: poetry install --no-interaction
+
+      # Both steps report without failing the job while the existing violations are
+      # being worked through. Drop continue-on-error once a step is clean: a check
+      # that is always red teaches everyone to ignore it.
+      - name: ruff
+        continue-on-error: true
+        run: poetry run ruff check --output-format=github .
+
+      - name: mypy
+        continue-on-error: true
+        run: poetry run mypy

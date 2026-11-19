@@ -45,7 +45,11 @@ dev = [
     "pytest (>=9.2.0,<10.0.0)",
     "pytest-asyncio (>=1.4.1.post1,<2.0.0)",
     "pytest-cov (>=7.1.0,<8.0.0)",
-    "aiosqlite (>=0.22.1,<0.23.0)"
+    "aiosqlite (>=0.22.1,<0.23.0)",
+    # the minor is pinned on purpose: a ruff minor bump adds rules, and CI going red
+    # should be a decision, not a surprise
+    "ruff (>=0.16.9,<0.17.0)",
+    "mypy (>=1.0,<2.0.0)"
 ]
 
 [tool.pytest.ini_options]
@@ -66,3 +70,32 @@ branch = true
 show_missing = true
 skip_covered = true
 exclude_also = ["if __name__ == .__main__.:"]
+
+
+[tool.ruff]
+# src/ is already clean at 100; the long lines left are all in tests.
+line-length = 100
+# Alembic generates these. Reformatting them to please the linter is pointless: the
+# next `alembic revision --autogenerate` writes them its own way again.
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+# ASYNC earns its place here: it catches blocking calls inside async functions,
+# which is the failure mode this codebase is most exposed to.
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "ASYNC", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Re-exported on purpose: importing this module is what registers the tables on Base.
+"src/langgraph_chatbot/models/__init__.py" = ["F401"]
+# Imports sit below the dotenv/env setup at the top of the file, by design.
+"tests/conftest.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.14"
+files = ["src", "evals"]
+# langchain, langgraph, livekit, mem0 and gradio ship little or no type information.
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
