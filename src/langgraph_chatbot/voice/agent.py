@@ -1,4 +1,5 @@
 import logging
+import os
 
 from dotenv import load_dotenv
 from livekit import agents
@@ -14,7 +15,7 @@ from livekit.plugins import elevenlabs, langchain, silero
 
 from langgraph_chatbot.ai.bootstrap import build_runtime
 from langgraph_chatbot.ai.context import ContextSchema, Mode
-from langgraph_chatbot.config import get_settings
+from langgraph_chatbot.config import VOICE_AGENT_NAME, get_settings
 from langgraph_chatbot.logger import log_context, setup_logging
 from langgraph_chatbot.voice.spoken_graph import SpokenOnly
 
@@ -45,7 +46,9 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
-@server.rtc_session(agent_name=get_settings().voice_agent_name)
+# os.environ, not get_settings(): this line runs at import, and Settings reads .env,
+# so building it here would make importing this module require a full config
+@server.rtc_session(agent_name=os.environ.get("VOICE_AGENT_NAME", VOICE_AGENT_NAME))
 async def entrypoint(ctx: agents.JobContext):
     await ctx.connect()
     try:

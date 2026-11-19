@@ -4,6 +4,11 @@ from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# the default lives out here so the voice worker can read the name without building
+# Settings at import time (see voice/agent.py)
+VOICE_AGENT_NAME = "chatbot-voice"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -28,7 +33,7 @@ class Settings(BaseSettings):
     # LiveKit routes a room to any worker registered under this name, and dev and prod
     # share one LiveKit project: give each environment its own name or they steal each
     # other's calls and save the conversation to their own vector store.
-    voice_agent_name: str = "chatbot-voice"
+    voice_agent_name: str = VOICE_AGENT_NAME
 
     eleven_voice_id: str
     eleven_api_key: SecretStr | None = None
