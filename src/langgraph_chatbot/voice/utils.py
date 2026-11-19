@@ -6,7 +6,6 @@ from livekit.protocol.agent_dispatch import RoomAgentDispatch
 from livekit.protocol.room import RoomConfiguration
 
 from langgraph_chatbot.config import Settings
-from langgraph_chatbot.voice.constants import VOICE_AGENT_NAME
 
 
 def build_voice_token(settings: Settings, *, user_id, chat_id) -> str:
@@ -21,7 +20,7 @@ def build_voice_token(settings: Settings, *, user_id, chat_id) -> str:
         .with_ttl(timedelta(minutes=10))
         .with_grants(VideoGrants(room_join=True, room=room))
         .with_room_config(
-            RoomConfiguration(agents=[RoomAgentDispatch(agent_name=VOICE_AGENT_NAME)])
+            RoomConfiguration(agents=[RoomAgentDispatch(agent_name=settings.voice_agent_name)])
         )
         .to_jwt()
     )

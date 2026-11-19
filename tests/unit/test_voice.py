@@ -9,7 +9,6 @@ import jwt
 import pytest
 
 from langgraph_chatbot.ai.context import ContextSchema, Mode
-from langgraph_chatbot.voice.constants import VOICE_AGENT_NAME
 from langgraph_chatbot.voice.spoken_graph import SpokenOnly
 from langgraph_chatbot.voice.utils import build_voice_token
 from tests.helpers import FakeGraph
@@ -32,7 +31,7 @@ def test_voice_token_claims(settings):
     assert claims["attributes"] == {"chat_id": str(chat_id)}
     assert claims["video"]["roomJoin"] is True
     assert claims["video"]["room"].startswith(f"voice-{chat_id}-")
-    assert claims["roomConfig"]["agents"][0]["agentName"] == VOICE_AGENT_NAME
+    assert claims["roomConfig"]["agents"][0]["agentName"] == settings.voice_agent_name
     assert claims["exp"] - claims["nbf"] == timedelta(minutes=10).total_seconds()
 
 

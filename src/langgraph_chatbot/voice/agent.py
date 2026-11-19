@@ -16,7 +16,6 @@ from langgraph_chatbot.ai.bootstrap import build_runtime
 from langgraph_chatbot.ai.context import ContextSchema, Mode
 from langgraph_chatbot.config import get_settings
 from langgraph_chatbot.logger import log_context, setup_logging
-from langgraph_chatbot.voice.constants import VOICE_AGENT_NAME
 from langgraph_chatbot.voice.spoken_graph import SpokenOnly
 
 # .env first: setup_logging reads LOG_LEVEL / LOG_FORMAT from the environment
@@ -44,7 +43,7 @@ def prewarm(proc: JobProcess):
 server.setup_fnc = prewarm
 
 
-@server.rtc_session(agent_name=VOICE_AGENT_NAME)
+@server.rtc_session(agent_name=get_settings().voice_agent_name)
 async def entrypoint(ctx: agents.JobContext):
     await ctx.connect()
     try:
