@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -10,6 +11,7 @@ from langgraph_chatbot.ai.context import ContextSchema, Mode
 from langgraph_chatbot.ai.nodes import agent as agent_module
 from langgraph_chatbot.ai.nodes.agent import (
     HISTORY_LIMIT,
+    SEARCH_LIMIT,
     SYSTEM_PROMPT,
     VOICE_SYSTEM_PROMPT,
     _current_turn,
@@ -20,6 +22,7 @@ from langgraph_chatbot.ai.nodes.agent import (
     make_load_history_node,
     make_recall_node,
     make_save_node,
+    make_search_history_node,
     make_save_user_question_node,
 )
 from langgraph_chatbot.chat.vector_models.stored_message import StoredMessage
@@ -56,12 +59,24 @@ def test_question_and_turn_id_come_from_newest_human_message():
 
 
 def test_system_prompt_by_mode():
-    assert _system_prompt(Mode.TEXT, []) == SYSTEM_PROMPT
-    assert _system_prompt(Mode.VOICE, []) == VOICE_SYSTEM_PROMPT
+    assert _system_prompt(Mode.TEXT, [], []).startswith(SYSTEM_PROMPT)
+    assert _system_prompt(Mode.VOICE, [], []).startswith(VOICE_SYSTEM_PROMPT)
+
+
+def test_system_prompt_states_today():
+    # without a date the model falls back to its training year when it searches
+    assert f"{datetime.now(UTC):%A, %d %B %Y}" in _system_prompt(Mode.TEXT, [], [])
+
+
+def test_system_prompt_lists_related_messages():
+    prompt = _system_prompt(Mode.TEXT, [], ["we booked Lisbon"])
+
+    assert "- we booked Lisbon" in prompt
+    assert "they can come from other chats" in prompt
 
 
 def test_system_prompt_lists_memories():
-    prompt = _system_prompt(Mode.TEXT, ["likes tea", "name is Ann"])
+    prompt = _system_prompt(Mode.TEXT, ["likes tea", "name is Ann"], [])
 
     assert prompt.startswith(SYSTEM_PROMPT)
     assert "- likes tea\n- name is Ann" in prompt
@@ -123,6 +138,32 @@ async def test_recall_times_out(monkeypatch):
     assert result == {"memories": []}
 
 
+# ----------------------------------------------------------- search_history
+async def test_search_history_returns_the_texts_it_found():
+    store = AsyncMock()
+    store.search.return_value = [
+        StoredMessage(role="user", content="we booked Lisbon"),
+        StoredMessage(role="assistant", content="in May"),
+    ]
+
+    result = await make_search_history_node(store)({"messages": conversation()}, runtime())
+
+    store.search.assert_awaited_once_with(
+        user_id=USER_ID, query="what is 2+2?", limit=SEARCH_LIMIT
+    )
+    assert result == {"related": ["we booked Lisbon", "in May"]}
+
+
+async def test_search_history_failure_does_not_break_the_chat(caplog):
+    broken = AsyncMock()
+    broken.search.side_effect = RuntimeError("qdrant down")
+
+    result = await make_search_history_node(broken)({"messages": conversation()}, runtime())
+
+    assert result == {"related": []}
+    assert "History search failed" in caplog.text
+
+
 # ------------------------------------------------------------------- agent
 @pytest.mark.parametrize(
     ("mode", "prompt"), [(Mode.TEXT, SYSTEM_PROMPT), (Mode.VOICE, VOICE_SYSTEM_PROMPT)]
@@ -140,7 +181,7 @@ async def test_agent_prompt_is_system_history_then_current_turn(scripted_llm, mo
     assert result["messages"][0].content == "the answer"
     (sent,) = llm.calls
     assert isinstance(sent[0], SystemMessage)
-    assert sent[0].content == prompt
+    assert sent[0].content.startswith(prompt)
     assert [(m.type, m.content) for m in sent[1:3]] == [("human", "h1"), ("ai", "h2")]
     # the older session messages ("old question") are not sent: Qdrant history is used
     assert [m.id for m in sent[3:]] == ["h-now", "a-tool", "t-1"]
@@ -153,6 +194,21 @@ async def test_agent_works_without_history_and_memories_keys(scripted_llm):
 
     (sent,) = llm.calls
     assert [m.type for m in sent] == ["system", "human"]
+
+
+async def test_agent_skips_related_messages_already_in_history(scripted_llm):
+    llm = scripted_llm(AIMessage("ok"))
+    state = {
+        "messages": [HumanMessage("hi", id="h")],
+        "history": [{"role": "user", "content": "h1"}],
+        "related": ["h1", "from another chat"],
+    }
+
+    await make_agent_node(llm)(state, runtime())
+
+    prompt = llm.calls[0][0].content
+    assert "- from another chat" in prompt
+    assert "- h1" not in prompt
 
 
 async def test_agent_includes_memories_in_system_prompt(scripted_llm):
