@@ -19,6 +19,7 @@ from langgraph_chatbot.ai.nodes.agent import (
     make_recall_node,
     make_save_node,
     make_save_user_question_node,
+    make_search_history_node,
 )
 from langgraph_chatbot.ai.state import AppState
 from langgraph_chatbot.chat.repositories.messages_store import MessagesStore
@@ -77,6 +78,7 @@ def build_graph(
     agent_llm = llm.bind_tools(tools) if tools else llm
     workflow.add_node("load_history", make_load_history_node(messages_store))
     workflow.add_node("recall", make_recall_node(user_memory))
+    workflow.add_node("search_history", make_search_history_node(messages_store))
     workflow.add_node(
         "agent",
         make_agent_node(agent_llm),
@@ -96,7 +98,8 @@ def build_graph(
     # history (Qdrant) and long-term memory (Mem0) load in parallel; agent waits for both
     workflow.add_edge(START, "load_history")
     workflow.add_edge(START, "recall")
-    workflow.add_edge(["load_history", "recall"], "agent")
+    workflow.add_edge(START, "search_history")
+    workflow.add_edge(["load_history", "recall", "search_history"], "agent")
     workflow.add_conditional_edges(
         "agent",
         tools_condition,

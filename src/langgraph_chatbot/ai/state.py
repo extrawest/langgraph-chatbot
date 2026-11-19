@@ -10,3 +10,6 @@ class AppState(MessagesState):
     history: list[dict]
     # long-term facts about the user recalled from Mem0 (cross-chat)
     memories: list[str]
+    # older messages of this user that the vector search found relevant to the
+    # question - unlike `history`, these can come from any of their chats
+    related: list[str]

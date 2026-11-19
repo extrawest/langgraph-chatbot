@@ -29,6 +29,9 @@ _Coming soon._
 - **Vector store as the source of truth** — message history lives in Qdrant, not in a
   LangGraph checkpointer, so the same conversation is reachable from the HTTP API, the
   Gradio UI and the voice worker without a shared process.
+- **Semantic search over past messages** — besides the chronological history of the
+  current chat, the graph embeds the question and pulls the closest messages from
+  anywhere in the user's history, including other chats.
 - **Cross-chat memory** — Mem0 extracts durable facts about the user and injects them
   into later conversations, including conversations in other chats.
 - **Live web access via MCP** — Tavily (`tavily_search`, `tavily_extract`) and Firecrawl
@@ -82,9 +85,11 @@ flowchart TD
     START(["START"])
     START --> load_history["load_history<br/><i>Qdrant: recent messages</i>"]
     START --> recall["recall<br/><i>Mem0: cross-chat facts</i>"]
+    START --> search["search_history<br/><i>Qdrant: messages related to the question</i>"]
 
     load_history --> agent
     recall --> agent
+    search --> agent
 
     agent["agent<br/><i>Gemini, tools bound</i>"]
     agent -->|tool call| agent_tools["agent_tools<br/><i>Tavily / Firecrawl MCP</i><br/>timeout 20s"]
@@ -96,9 +101,10 @@ flowchart TD
     save --> END(["END"])
 ```
 
-`load_history` and `recall` are both fanned out from `START` and joined on `agent`, so
-the vector-store read and the memory lookup happen **concurrently** instead of in
-sequence. `agent` and `save` carry a `RetryPolicy` scoped to transient failures only;
+`load_history`, `recall` and `search_history` all fan out from `START` and join on
+`agent`, so the three retrievals happen **concurrently** instead of in sequence.
+`load_history` returns the last messages of *this* chat in order; `search_history` is
+the semantic one, and its results can come from any of the user's chats. `agent` and `save` carry a `RetryPolicy` scoped to transient failures only;
 `agent_tools` carries a `TimeoutPolicy` so a slow MCP server cannot stall a turn.
 
 ## Voice mode
@@ -290,13 +296,13 @@ experiments, which is where two runs get compared example by example.
 **Qdrant is the source of truth for messages, not a LangGraph checkpointer.**
 Three separate processes (API, UI, voice worker) need the same conversation. A
 checkpointer would bind that state to one graph instance; a vector store makes it a
-shared resource that also happens to be searchable. Postgres keeps only users and chat
-metadata.
+shared resource that the graph can also search by meaning, not just read in order.
+Postgres keeps only users and chat metadata.
 
-**History and memory load concurrently.**
-`load_history` (Qdrant) and `recall` (Mem0) are independent reads fanned out from
-`START` and joined on `agent`. Running them in sequence would add their latencies
-together on every single turn.
+**All three retrievals load concurrently.**
+`load_history` (chat history from Qdrant), `search_history` (semantic search in Qdrant)
+and `recall` (Mem0) are independent reads fanned out from `START` and joined on `agent`.
+Running them in sequence would add their latencies together on every single turn.
 
 **Tool output is trimmed to 8 000 characters.**
 A single `firecrawl_scrape` returned 608 000 characters in testing — enough to blow the

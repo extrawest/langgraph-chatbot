@@ -18,6 +18,7 @@ from langgraph_chatbot.chat.repositories.messages_store import MessagesStore
 logger = logging.getLogger(__name__)
 
 HISTORY_LIMIT = 20
+SEARCH_LIMIT = 5
 RECALL_TIMEOUT_SECONDS = 3.0
 
 SYSTEM_PROMPT = """
@@ -114,26 +115,53 @@ def make_recall_node(user_memory: UserMemory):
     return recall
 
 
-def _system_prompt(mode: Mode, memories: list[str]) -> str:
-    base = VOICE_SYSTEM_PROMPT if mode is Mode.VOICE else SYSTEM_PROMPT
-    if not memories:
-        return base
-    facts = "\n".join(f"- {m}" for m in memories)
-    return (
-        f"{base}\n"
-        "Known facts about the user from earlier conversations "
-        "(use them only when relevant, do not mention that you store memories):\n"
-        f"{facts}\n"
-    )
+def make_search_history_node(messages_store: MessagesStore):
+    async def search_history(state: AppState, runtime: Runtime[ContextSchema]):
+        try:
+            found = await messages_store.search(
+                user_id=runtime.context.user_id,
+                query=_question(state["messages"]),
+                limit=SEARCH_LIMIT,
+            )
+        except Exception:
+            logger.exception("History search failed")
+            return {"related": []}
+        return {"related": [m.content for m in found]}
+
+    return search_history
+
+
+def _system_prompt(mode: Mode, memories: list[str], related: list[str]) -> str:
+    prompt = VOICE_SYSTEM_PROMPT if mode is Mode.VOICE else SYSTEM_PROMPT
+    if memories:
+        facts = "\n".join(f"- {m}" for m in memories)
+        prompt += (
+            "\nKnown facts about the user from earlier conversations "
+            "(use them only when relevant, do not mention that you store memories):\n"
+            f"{facts}\n"
+        )
+    if related:
+        earlier = "\n".join(f"- {m}" for m in related)
+        prompt += (
+            "\nEarlier messages from this user that may relate to the question "
+            "(they can come from other chats; ignore them if they do not help):\n"
+            f"{earlier}\n"
+        )
+    return prompt
 
 
 def make_agent_node(llm: BaseChatModel):
     async def chat(state: AppState, runtime: Runtime[ContextSchema]):
-        prompt = _system_prompt(runtime.context.mode, state.get("memories", []))
+        history = state.get("history", [])
+        # whatever the search found is only worth showing if it is not already in
+        # the recent history the model receives anyway
+        seen = {m["content"] for m in history}
+        related = [m for m in state.get("related", []) if m not in seen]
+        prompt = _system_prompt(runtime.context.mode, state.get("memories", []), related)
         response = await llm.ainvoke(
             [
                 SystemMessage(content=prompt),
-                *convert_to_messages(state.get("history", [])),
+                *convert_to_messages(history),
                 *_current_turn(state["messages"]),
             ]
         )
