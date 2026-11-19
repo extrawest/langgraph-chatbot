@@ -72,4 +72,10 @@ EXPOSE 8000
 #   api    : uvicorn langgraph_chatbot.main:app --host 0.0.0.0 --port 8000
 #   ui     : python -m langgraph_chatbot.ui.app
 #   worker : python -m langgraph_chatbot.voice.agent start
+# Last on purpose: this value changes on every release, and every layer after an
+# ARG loses its cache. The app reports it at /health, which is what lets a deploy
+# verify that the container now running is the one that was released.
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
 CMD ["uvicorn", "langgraph_chatbot.main:app", "--host", "0.0.0.0", "--port", "8000"]

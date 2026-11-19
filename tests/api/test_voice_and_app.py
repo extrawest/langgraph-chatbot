@@ -69,7 +69,7 @@ async def test_voice_disabled_without_livekit_credentials(
 # ------------------------------------------------------------- app & static
 async def test_health(client):
     response = await client.get("/health")
-    assert (response.status_code, response.json()) == (200, {"status": "ok"})
+    assert (response.status_code, response.json()) == (200, {"status": "ok", "version": "dev"})
 
 
 async def test_voice_ui_is_served(client):

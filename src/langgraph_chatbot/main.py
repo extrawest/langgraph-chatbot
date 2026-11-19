@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -54,8 +55,11 @@ async def health() -> dict[str, str]:
 
     Deliberately checks nothing downstream: if this pinged Postgres or Qdrant,
     a blip in either would make Docker restart an otherwise healthy process.
+
+    The version is the git tag the image was built from ("dev" outside a release),
+    so a deploy can check which release is actually serving.
     """
-    return {"status": "ok"}
+    return {"status": "ok", "version": os.environ.get("APP_VERSION", "dev")}
 
 
 app.mount(
