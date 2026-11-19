@@ -26,7 +26,9 @@ def context():
 
 
 def _record(msg="hello %s", args=("world",), exc_info=None) -> logging.LogRecord:
-    return logging.LogRecord("langgraph_chatbot.test", logging.INFO, __file__, 1, msg, args, exc_info)
+    return logging.LogRecord(
+        "langgraph_chatbot.test", logging.INFO, __file__, 1, msg, args, exc_info
+    )
 
 
 def test_context_filter_copies_context_to_record(context):

@@ -59,7 +59,10 @@ async def test_ensure_collection_creates_tenant_and_range_indexes(embeddings):
 
     await MessagesStore("messages", embeddings, client).ensure_collection()
 
-    fields = {c.kwargs["field_name"]: c.kwargs["field_schema"] for c in client.create_payload_index.await_args_list}
+    fields = {
+        c.kwargs["field_name"]: c.kwargs["field_schema"]
+        for c in client.create_payload_index.await_args_list
+    }
     assert set(fields) == {"group_id", "chat_id", "created_at"}
     assert fields["group_id"].is_tenant is True
     assert fields["created_at"].range is True

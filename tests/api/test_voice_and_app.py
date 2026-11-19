@@ -31,15 +31,21 @@ async def test_voice_token_creates_voice_chat(client, alice, auth_headers, setti
 async def test_voice_token_for_existing_chat(client, alice, auth_headers, chat_factory):
     chat = await chat_factory(alice)
 
-    response = await client.post("/voice/token", json={"chat_id": str(chat.id)}, headers=auth_headers(alice))
+    response = await client.post(
+        "/voice/token", json={"chat_id": str(chat.id)}, headers=auth_headers(alice)
+    )
 
     assert response.json()["chat_id"] == str(chat.id)
 
 
-async def test_voice_token_for_someone_elses_chat(client, alice, user_factory, auth_headers, chat_factory):
+async def test_voice_token_for_someone_elses_chat(
+    client, alice, user_factory, auth_headers, chat_factory
+):
     chat = await chat_factory(await user_factory())
 
-    response = await client.post("/voice/token", json={"chat_id": str(chat.id)}, headers=auth_headers(alice))
+    response = await client.post(
+        "/voice/token", json={"chat_id": str(chat.id)}, headers=auth_headers(alice)
+    )
 
     assert response.status_code == 404
 
@@ -49,7 +55,9 @@ async def test_voice_token_requires_auth(client):
 
 
 @pytest.mark.parametrize("missing", ["livekit_api_key", "livekit_api_secret"])
-async def test_voice_disabled_without_livekit_credentials(client, alice, auth_headers, settings, missing):
+async def test_voice_disabled_without_livekit_credentials(
+    client, alice, auth_headers, settings, missing
+):
     setattr(settings, missing, None)
 
     response = await client.post("/voice/token", json={}, headers=auth_headers(alice))

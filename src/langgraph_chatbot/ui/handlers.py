@@ -46,9 +46,7 @@ class UiHandlers:
             access_token = await self._api.login(email, password)
             return await self._session(access_token)
         except ApiError as exc:
-            detail = (
-                "Incorrect email or password" if exc.status_code == 401 else exc.detail
-            )
+            detail = "Incorrect email or password" if exc.status_code == 401 else exc.detail
             return (*noops(4), f"⚠️ {detail}", *noops(SIDEBAR_SIZE + 1))
 
     async def register(self, email: str, password: str, confirm_password: str):
@@ -94,9 +92,7 @@ class UiHandlers:
         # nothing is created here: the chat appears on the backend with the first message
         return sidebar(chats, None, hist)
 
-    async def select(
-        self, access_token: str, chat_id: str | None, chats: list[dict], hist: dict
-    ):
+    async def select(self, access_token: str, chat_id: str | None, chats: list[dict], hist: dict):
         if chat_id:
             try:
                 messages = await self._api.get_messages(access_token, chat_id)
@@ -142,9 +138,7 @@ class UiHandlers:
             return noops(SIDEBAR_SIZE + 3)
         logger.info("confirm_edit %s title=%r", target, new_title)
         if target["mode"] == "rename":
-            result = await self._rename(
-                access_token, target["id"], new_title, current_id, hist
-            )
+            result = await self._rename(access_token, target["id"], new_title, current_id, hist)
         else:
             result = await self._delete(access_token, target["id"], current_id, hist)
         if result is None:  # a warning was already shown, keep the panel open
@@ -172,9 +166,7 @@ class UiHandlers:
             return None
         return (*sidebar(chats, current_id, hist), hist)
 
-    async def _delete(
-        self, access_token: str, chat_id: str, current_id: str | None, hist: dict
-    ):
+    async def _delete(self, access_token: str, chat_id: str, current_id: str | None, hist: dict):
         """Returns SIDEBAR_OUTPUTS + histories, or None after showing a warning."""
         try:
             await self._api.delete_chat(access_token, chat_id)

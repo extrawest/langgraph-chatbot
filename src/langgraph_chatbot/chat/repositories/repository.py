@@ -4,7 +4,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from langgraph_chatbot.models.chat import Chat
-from langgraph_chatbot.models.user import User
 
 
 class EmailAlreadyExists(Exception):
@@ -21,9 +20,7 @@ class ChatRepository:
         return result.scalar_one_or_none()
 
     async def list_for_user(self, user_id: uuid.UUID) -> list[Chat] | None:
-        stmt = (
-            select(Chat).where(Chat.user_id == user_id).order_by(Chat.updated_at.desc())
-        )
+        stmt = select(Chat).where(Chat.user_id == user_id).order_by(Chat.updated_at.desc())
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 

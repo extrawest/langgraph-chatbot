@@ -58,9 +58,22 @@ async def test_calls_graph_with_question_and_context():
 async def test_tool_calls_become_started_and_done_events():
     graph = FakeGraph(
         [
-            (AIMessageChunk("", tool_call_chunks=[{"name": "tavily_search", "args": "", "id": "c1", "index": 0}]), "agent"),
+            (
+                AIMessageChunk(
+                    "",
+                    tool_call_chunks=[
+                        {"name": "tavily_search", "args": "", "id": "c1", "index": 0}
+                    ],
+                ),
+                "agent",
+            ),
             # follow-up chunks of the same call carry only args, no name
-            (AIMessageChunk("", tool_call_chunks=[{"name": None, "args": '{"q":1}', "id": None, "index": 0}]), "agent"),
+            (
+                AIMessageChunk(
+                    "", tool_call_chunks=[{"name": None, "args": '{"q":1}', "id": None, "index": 0}]
+                ),
+                "agent",
+            ),
             (ToolMessage("page text", tool_call_id="c1", name="tavily_search"), "agent_tools"),
             (AIMessageChunk("Found it"), "agent"),
         ]
@@ -125,7 +138,10 @@ async def test_sets_log_context_for_the_request():
     ("exc", "message"),
     [
         (TimeoutError(), "The request took too long, please try again"),
-        (SimpleNamespace(status_code=429), "The service is busy right now, please try again in a moment"),
+        (
+            SimpleNamespace(status_code=429),
+            "The service is busy right now, please try again in a moment",
+        ),
         (SimpleNamespace(code=429), "The service is busy right now, please try again in a moment"),
         (SimpleNamespace(status_code=500), "Something went wrong"),
         (ValueError("x"), "Something went wrong"),

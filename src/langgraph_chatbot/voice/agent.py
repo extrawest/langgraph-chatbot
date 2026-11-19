@@ -90,9 +90,7 @@ async def entrypoint(ctx: agents.JobContext):
     @session.on("error")
     def _on_error(ev):
         # ev.source is the STT / LLM / TTS component that failed
-        logger.error(
-            "Voice session error from %s: %s", type(ev.source).__name__, ev.error
-        )
+        logger.error("Voice session error from %s: %s", type(ev.source).__name__, ev.error)
 
     ctx.add_shutdown_callback(runtime.aclose)
     await session.start(room=ctx.room, agent=Assistant())

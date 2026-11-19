@@ -48,9 +48,7 @@ def test_token_expiry(delta, expected):
     before = datetime.now(UTC)
     token = create_access_token({"sub": "u"}, SECRET, "HS256", expires_delta=delta)
 
-    exp = datetime.fromtimestamp(
-        decode_access_token(token, SECRET, "HS256")["exp"], UTC
-    )
+    exp = datetime.fromtimestamp(decode_access_token(token, SECRET, "HS256")["exp"], UTC)
 
     # exp is stored with second precision
     assert before + expected - timedelta(seconds=2) <= exp
@@ -58,9 +56,7 @@ def test_token_expiry(delta, expected):
 
 
 def test_expired_token_is_rejected():
-    token = create_access_token(
-        {"sub": "u"}, SECRET, "HS256", expires_delta=timedelta(seconds=-1)
-    )
+    token = create_access_token({"sub": "u"}, SECRET, "HS256", expires_delta=timedelta(seconds=-1))
     with pytest.raises(jwt.ExpiredSignatureError):
         decode_access_token(token, SECRET, "HS256")
 

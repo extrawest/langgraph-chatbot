@@ -19,9 +19,7 @@ def make_client(handler) -> tuple[ApiClient, list[httpx.Request]]:
         return handler(request)
 
     api = ApiClient(BASE + "/")
-    api._client = httpx.AsyncClient(
-        base_url=BASE, transport=httpx.MockTransport(recording)
-    )
+    api._client = httpx.AsyncClient(base_url=BASE, transport=httpx.MockTransport(recording))
     return api, seen
 
 
@@ -37,9 +35,7 @@ def json_response(status=200, body=None):
         (
             httpx.Response(
                 422,
-                json={
-                    "detail": [{"msg": "field required"}, {"msg": "too short"}, "raw"]
-                },
+                json={"detail": [{"msg": "field required"}, {"msg": "too short"}, "raw"]},
             ),
             "field required; too short; raw",
         ),
@@ -119,9 +115,7 @@ async def test_empty_body_returns_none():
 
 # --------------------------------------------------------------- endpoints
 async def test_login_uses_oauth2_form_fields():
-    api, seen = make_client(
-        json_response(body={"access_token": "jwt", "token_type": "bearer"})
-    )
+    api, seen = make_client(json_response(body={"access_token": "jwt", "token_type": "bearer"}))
 
     assert await api.login("me@x.io", "pw") == "jwt"
 
@@ -202,9 +196,7 @@ SSE_BODY = (
 
 async def test_stream_message_parses_sse_events():
     api, seen = make_client(
-        lambda r: httpx.Response(
-            200, text=SSE_BODY, headers={"content-type": "text/event-stream"}
-        )
+        lambda r: httpx.Response(200, text=SSE_BODY, headers={"content-type": "text/event-stream"})
     )
 
     events = [e async for e in api.stream_message("hello", None, token="tok")]

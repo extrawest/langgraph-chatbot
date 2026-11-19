@@ -111,6 +111,7 @@ async def test_recall_failure_does_not_break_the_chat(caplog):
 
 async def test_recall_times_out(monkeypatch):
     monkeypatch.setattr(agent_module, "RECALL_TIMEOUT_SECONDS", 0.01)
+
     async def never_answers(**kwargs):
         await asyncio.sleep(10)
 
@@ -123,7 +124,9 @@ async def test_recall_times_out(monkeypatch):
 
 
 # ------------------------------------------------------------------- agent
-@pytest.mark.parametrize(("mode", "prompt"), [(Mode.TEXT, SYSTEM_PROMPT), (Mode.VOICE, VOICE_SYSTEM_PROMPT)])
+@pytest.mark.parametrize(
+    ("mode", "prompt"), [(Mode.TEXT, SYSTEM_PROMPT), (Mode.VOICE, VOICE_SYSTEM_PROMPT)]
+)
 async def test_agent_prompt_is_system_history_then_current_turn(scripted_llm, mode, prompt):
     llm = scripted_llm(AIMessage("the answer"))
     state = {

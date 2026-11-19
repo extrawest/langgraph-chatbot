@@ -86,7 +86,9 @@ async def test_users_see_only_their_own_chats(client, alice, bob, chat_factory, 
         response = await client.get(path, headers=auth_headers(alice))
         assert response.status_code == 404, path
         assert response.json() == {"detail": "Chat not found"}
-    response = await client.patch(f"/chats/{theirs.id}", json={"title": "pwned"}, headers=auth_headers(alice))
+    response = await client.patch(
+        f"/chats/{theirs.id}", json={"title": "pwned"}, headers=auth_headers(alice)
+    )
     assert response.status_code == 404
 
 
@@ -121,7 +123,9 @@ async def test_messages(client, as_alice, alice, chat_factory, messages_store):
     chat = await chat_factory(alice)
     assert (await client.get(f"/chats/{chat.id}/messages", headers=as_alice)).json() == []
 
-    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi")
+    await messages_store.add(
+        user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi"
+    )
 
     response = await client.get(f"/chats/{chat.id}/messages", headers=as_alice)
     assert response.json() == [{"role": "user", "content": "hi"}]
@@ -139,13 +143,17 @@ async def test_delete_chat_removes_it_and_its_messages(
     doomed = await chat_factory(alice, "doomed")
     kept = await chat_factory(alice, "kept")
     for chat in (doomed, kept):
-        await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi")
+        await messages_store.add(
+            user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi"
+        )
 
     response = await client.delete(f"/chats/{doomed.id}", headers=as_alice)
 
     assert response.status_code == 204
     assert response.content == b""
-    assert [c["id"] for c in (await client.get("/chats", headers=as_alice)).json()] == [str(kept.id)]
+    assert [c["id"] for c in (await client.get("/chats", headers=as_alice)).json()] == [
+        str(kept.id)
+    ]
     assert (await client.get(f"/chats/{doomed.id}", headers=as_alice)).status_code == 404
     assert await messages_store.recent(user_id=alice.id, chat_id=doomed.id) == []
     assert len(await messages_store.recent(user_id=alice.id, chat_id=kept.id)) == 1
@@ -156,9 +164,13 @@ async def test_delete_missing_chat(client, as_alice):
     assert (response.status_code, response.json()) == (404, {"detail": "Chat not found"})
 
 
-async def test_cannot_delete_someone_elses_chat(client, as_alice, bob, chat_factory, messages_store, auth_headers):
+async def test_cannot_delete_someone_elses_chat(
+    client, as_alice, bob, chat_factory, messages_store, auth_headers
+):
     chat = await chat_factory(bob)
-    await messages_store.add(user_id=bob.id, chat_id=chat.id, turn_id="t", role="user", content="bob's")
+    await messages_store.add(
+        user_id=bob.id, chat_id=chat.id, turn_id="t", role="user", content="bob's"
+    )
 
     response = await client.delete(f"/chats/{chat.id}", headers=as_alice)
 
@@ -176,7 +188,12 @@ async def test_delete_twice(client, as_alice, alice, chat_factory):
 # --------------------------------------------------------- send (SSE stream)
 async def test_send_message_to_new_chat_creates_it(client, as_alice, alice, fake_graph):
     fake_graph.script = [
-        (AIMessageChunk("", tool_call_chunks=[{"name": "tavily_search", "args": "", "id": "1", "index": 0}]), "agent"),
+        (
+            AIMessageChunk(
+                "", tool_call_chunks=[{"name": "tavily_search", "args": "", "id": "1", "index": 0}]
+            ),
+            "agent",
+        ),
         (ToolMessage("results", tool_call_id="1", name="tavily_search"), "agent_tools"),
         (AIMessageChunk("Hello"), "agent"),
         (AIMessageChunk(" there"), "agent"),
@@ -257,5 +274,7 @@ async def test_send_message_graph_failure_becomes_error_event(client, as_alice, 
 
 async def test_send_message_validation(client, as_alice):
     assert (await client.post("/chats/messages", json={}, headers=as_alice)).status_code == 422
-    response = await client.post("/chats/messages", json={"message": "x", "chat_id": "nope"}, headers=as_alice)
+    response = await client.post(
+        "/chats/messages", json={"message": "x", "chat_id": "nope"}, headers=as_alice
+    )
     assert response.status_code == 422

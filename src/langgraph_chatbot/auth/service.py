@@ -1,5 +1,3 @@
-import uuid
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from langgraph_chatbot.auth.security import get_password_hash, verify_password

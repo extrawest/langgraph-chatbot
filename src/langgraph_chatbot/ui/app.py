@@ -35,9 +35,7 @@ API_URL_PUBLIC = os.environ.get("API_URL_PUBLIC", API_URL_INTERNAL)
 
 # Gradio 5 needs type="messages"; Gradio 6 dropped the argument (messages only).
 _CHATBOT_KWARGS = (
-    {"type": "messages"}
-    if "type" in inspect.signature(gr.Chatbot.__init__).parameters
-    else {}
+    {"type": "messages"} if "type" in inspect.signature(gr.Chatbot.__init__).parameters else {}
 )
 # chat list: flat rows like a sidebar menu, only the list scrolls (not the page)
 CSS = """
@@ -73,9 +71,7 @@ def build_ui(
     with gr.Blocks(title="LangGraph Chatbot") as demo:
         # per-browser-session state
         token = gr.State(None)
-        saved_token = gr.BrowserState(
-            None, storage_key="chatbot_token", secret=STORAGE_SECRET
-        )
+        saved_token = gr.BrowserState(None, storage_key="chatbot_token", secret=STORAGE_SECRET)
         histories = gr.State({})  # chat_id -> list of messages (placeholder, in memory)
         chats_state = gr.State([])
         current_chat = gr.State(None)
@@ -97,9 +93,7 @@ def build_ui(
                         type="password",
                         info="8-20 characters, 1 digit, and 1 symbol",
                     )
-                    reg_confirm_password = gr.Textbox(
-                        label="Confirm password", type="password"
-                    )
+                    reg_confirm_password = gr.Textbox(label="Confirm password", type="password")
                     reg_btn = gr.Button("Create account")
             auth_msg = gr.Markdown()
 
@@ -111,7 +105,7 @@ def build_ui(
         with gr.Row(visible=False) as chat_view:
             with gr.Column(scale=1, min_width=280):
                 user_md = gr.Markdown()
-                new_chat_btn = gr.Button("＋ New chat", variant="primary")
+                new_chat_btn = gr.Button("+ New chat", variant="primary")
                 with gr.Column(elem_id="chat-list"):
                     render_chat_list(
                         h=h,
@@ -127,9 +121,7 @@ def build_ui(
                     edit_label = gr.Markdown()
                     edit_box = gr.Textbox(show_label=False, container=False)
                     with gr.Row():
-                        edit_ok = gr.Button(
-                            "✓ Confirm", variant="primary", min_width=60
-                        )
+                        edit_ok = gr.Button("✓ Confirm", variant="primary", min_width=60)
                         edit_cancel = gr.Button("Cancel", min_width=60)
                 logout_btn = gr.Button("Log out", size="sm")
 
@@ -149,9 +141,7 @@ def build_ui(
                         submit_btn=True,
                         scale=9,
                     )
-                    voice_btn = gr.Button(
-                        "🎙", variant="secondary", scale=1, min_width=30
-                    )
+                    voice_btn = gr.Button("🎙", variant="secondary", scale=1, min_width=30)
                 # clicked from JS when the voice frame says "voice-closed"; it must live
                 # outside voice_panel (a hidden Column is not in the DOM)
                 voice_closed = gr.Button(visible="hidden", elem_id="voice-closed")
@@ -170,12 +160,8 @@ def build_ui(
         }
         login_btn.click(**login_args).then(lambda t: t, token, saved_token)
         login_password.submit(**login_args).then(lambda t: t, token, saved_token)
-        reg_btn.click(
-            h.register, [reg_email, reg_password, reg_confirm_password], SESSION_OUTPUTS
-        )
-        logout_btn.click(h.logout, None, SESSION_OUTPUTS).then(
-            lambda: None, None, saved_token
-        )
+        reg_btn.click(h.register, [reg_email, reg_password, reg_confirm_password], SESSION_OUTPUTS)
+        logout_btn.click(h.logout, None, SESSION_OUTPUTS).then(lambda: None, None, saved_token)
 
         new_chat_btn.click(h.new_chat, [chats_state, histories], SIDEBAR_OUTPUTS)
         edit_args = {
@@ -202,9 +188,9 @@ def build_ui(
                 voice_timer,
             ],
         )
-        voice_closed.click(
-            h.voice_close, None, [voice_frame, voice_panel, voice_timer]
-        ).then(h.select, [token, current_chat, chats_state, histories], SIDEBAR_OUTPUTS)
+        voice_closed.click(h.voice_close, None, [voice_frame, voice_panel, voice_timer]).then(
+            h.select, [token, current_chat, chats_state, histories], SIDEBAR_OUTPUTS
+        )
         voice_timer.tick(h.poll_chat, [token, current_chat, chatbot], [chatbot])
         demo.load(h.restore, saved_token, SESSION_OUTPUTS)
         demo.load(None, None, None, js=voice_listener_js(public_api_url))

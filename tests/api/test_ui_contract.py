@@ -14,9 +14,7 @@ from langgraph_chatbot.ui.api_client import ApiClient, ApiError
 @pytest.fixture
 async def api(app):
     api = ApiClient("http://test")
-    api._client = httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://test"
-    )
+    api._client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
     yield api
     await api._client.aclose()
 

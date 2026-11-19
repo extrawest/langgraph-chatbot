@@ -28,16 +28,12 @@ async def list_user_chats(current_user: CurrentUser, service: ChatServiceDep):
 
 
 @router.post("", response_model=ChatRead, status_code=201)
-async def create_chat(
-    data: ChatCreate, current_user: CurrentUser, service: ChatServiceDep
-):
+async def create_chat(data: ChatCreate, current_user: CurrentUser, service: ChatServiceDep):
     return await service.create_chat(current_user.id, data.title)
 
 
 @router.get("/{chat_id}", response_model=ChatRead)
-async def get_chat(
-    chat_id: uuid.UUID, current_user: CurrentUser, service: ChatServiceDep
-):
+async def get_chat(chat_id: uuid.UUID, current_user: CurrentUser, service: ChatServiceDep):
     chat = await service.get_chat(chat_id, current_user.id)
     if chat is None:
         raise HTTPException(status_code=404, detail="Chat not found")
@@ -45,9 +41,7 @@ async def get_chat(
 
 
 @router.get("/{chat_id}/messages", response_model=list[MessageRead])
-async def get_chat_messages(
-    chat_id: uuid.UUID, current_user: CurrentUser, service: ChatServiceDep
-):
+async def get_chat_messages(chat_id: uuid.UUID, current_user: CurrentUser, service: ChatServiceDep):
     messages = await service.get_messages(chat_id, current_user.id)
     if messages is None:
         raise HTTPException(status_code=404, detail="Chat not found")

@@ -42,7 +42,9 @@ async def test_trim_tool_output_truncates_long_results_keeping_id():
     assert trimmed.tool_call_id == "c1"
     assert trimmed.name == "web"
     assert trimmed.content.startswith("x" * TOOL_OUTPUT_LIMIT)
-    assert f"[truncated: {len(long)} chars total, first {TOOL_OUTPUT_LIMIT} shown]" in trimmed.content
+    assert (
+        f"[truncated: {len(long)} chars total, first {TOOL_OUTPUT_LIMIT} shown]" in trimmed.content
+    )
 
 
 async def test_trim_tool_output_leaves_short_results_alone():
@@ -212,7 +214,9 @@ async def test_graph_retries_transient_llm_errors(scripted_llm, messages_store, 
     assert len(llm.calls) == 2
 
 
-async def test_graph_does_not_retry_programming_errors(scripted_llm, messages_store, user_memory, ctx):
+async def test_graph_does_not_retry_programming_errors(
+    scripted_llm, messages_store, user_memory, ctx
+):
     llm = scripted_llm(ValueError("bug"), AIMessage("never"))
     graph = build_graph(llm, messages_store, user_memory, tools=[])
 

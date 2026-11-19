@@ -64,9 +64,7 @@ class UserMemory:
         return cls(AsyncMemory.from_config(build_mem0_config(settings)))
 
     async def recall(self, *, user_id: UUID, query: str, limit: int = 5) -> list[str]:
-        result = await self._memory.search(
-            query, filters={"user_id": str(user_id)}, top_k=limit
-        )
+        result = await self._memory.search(query, filters={"user_id": str(user_id)}, top_k=limit)
         return [item["memory"] for item in result.get("results", [])]
 
     async def remember(

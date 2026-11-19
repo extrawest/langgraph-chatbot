@@ -57,6 +57,7 @@ async def health() -> dict[str, str]:
     """
     return {"status": "ok"}
 
+
 app.mount(
     "/voice-ui",
     StaticFiles(directory=Path(__file__).parent / "voice" / "static", html=True),

@@ -54,9 +54,7 @@ class ChatService:
         chat = await self._repo.get_by_id(chat_id, user_id)
         return chat
 
-    async def get_or_create_chat(
-        self, chat_id: uuid.UUID | None, user_id: uuid.UUID, title: str
-    ):
+    async def get_or_create_chat(self, chat_id: uuid.UUID | None, user_id: uuid.UUID, title: str):
         if chat_id is None:
             return await self.create_chat(user_id, title)
         return await self.get_chat(chat_id, user_id)
@@ -68,9 +66,7 @@ class ChatService:
         await self._session.commit()
         return chat
 
-    async def rename_chat(
-        self, chat_id: uuid.UUID, user_id: uuid.UUID, title: str
-    ) -> Chat | None:
+    async def rename_chat(self, chat_id: uuid.UUID, user_id: uuid.UUID, title: str) -> Chat | None:
         chat = await self._repo.get_by_id(chat_id, user_id)
         if chat is None:
             return None
@@ -98,9 +94,7 @@ class ChatService:
         chat = await self._repo.get_by_id(chat_id, user_id)
         if chat is None:
             return None
-        return await self._messages_store.recent(
-            user_id=user_id, chat_id=chat_id, limit=limit
-        )
+        return await self._messages_store.recent(user_id=user_id, chat_id=chat_id, limit=limit)
 
     async def stream_reply(
         self, chat: Chat, user_id: uuid.UUID, message
@@ -108,9 +102,7 @@ class ChatService:
         chat_id = chat.id
         # every log record of this request (nodes included) now carries these fields;
         # no reset: each request runs in its own task, so nothing leaks to others
-        log_context.set(
-            {"chat_id": str(chat_id), "user_id": str(user_id), "mode": "text"}
-        )
+        log_context.set({"chat_id": str(chat_id), "user_id": str(user_id), "mode": "text"})
         yield ChatEvent(chat_id=chat_id, title=chat.title)
         config = {"metadata": {"chat_id": str(chat_id)}}
         context = ContextSchema(user_id=user_id, chat_id=chat_id)

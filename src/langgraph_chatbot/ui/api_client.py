@@ -29,8 +29,7 @@ def _extract_detail(response: httpx.Response) -> str:
         return detail
     if isinstance(detail, list):  # pydantic validation errors (422)
         return "; ".join(
-            str(item.get("msg", item)) if isinstance(item, dict) else str(item)
-            for item in detail
+            str(item.get("msg", item)) if isinstance(item, dict) else str(item) for item in detail
         )
     return response.reason_phrase
 
@@ -50,9 +49,7 @@ class ApiClient:
             )
         return self._client
 
-    async def _request(
-        self, method: str, path: str, *, token: str | None = None, **kwargs
-    ):
+    async def _request(self, method: str, path: str, *, token: str | None = None, **kwargs):
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         try:
             client = self._get_client()
@@ -107,16 +104,12 @@ class ApiClient:
         return await self._request("POST", "/chats", token=token, json={"title": title})
 
     async def rename_chat(self, token: str, chat_id: str, title: str) -> dict:
-        return await self._request(
-            "PATCH", f"/chats/{chat_id}", token=token, json={"title": title}
-        )
+        return await self._request("PATCH", f"/chats/{chat_id}", token=token, json={"title": title})
 
     async def delete_chat(self, token: str, chat_id: str) -> None:
         await self._request("DELETE", f"/chats/{chat_id}", token=token)
 
-    async def stream_message(
-        self, message: str, chat_id: str | None, *, token: str | None = None
-    ):
+    async def stream_message(self, message: str, chat_id: str | None, *, token: str | None = None):
         """Yield (event_name, data) pairs from the SSE stream of POST /chats/messages."""
         client = self._get_client()
         headers = {"Authorization": f"Bearer {token}"} if token else {}

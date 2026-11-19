@@ -84,9 +84,7 @@ async def test_recall_scopes_search_to_user(mem0):
     result = await UserMemory(mem0).recall(user_id=USER_ID, query="drinks?", limit=3)
 
     assert result == ["likes tea", "lives in Kyiv"]
-    mem0.search.assert_awaited_once_with(
-        "drinks?", filters={"user_id": str(USER_ID)}, top_k=3
-    )
+    mem0.search.assert_awaited_once_with("drinks?", filters={"user_id": str(USER_ID)}, top_k=3)
 
 
 async def test_recall_without_results(mem0):

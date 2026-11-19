@@ -142,9 +142,7 @@ def make_agent_node(llm: BaseChatModel):
     return chat
 
 
-def make_save_user_question_node(
-    messages_store: MessagesStore, user_memory: UserMemory
-):
+def make_save_user_question_node(messages_store: MessagesStore, user_memory: UserMemory):
     async def save_user_question(state: AppState, runtime: Runtime[ContextSchema]):
         ctx = runtime.context
         question = _question(state["messages"])

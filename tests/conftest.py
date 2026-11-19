@@ -17,35 +17,35 @@ for _var in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2"):
     os.environ[_var] = "false"
 # ---------------------------------------------------------------------------------
 
-import uuid  # noqa: E402
-from collections.abc import AsyncIterator, Callable  # noqa: E402
-from datetime import timedelta  # noqa: E402
-from typing import Any  # noqa: E402
+import uuid
+from collections.abc import AsyncIterator, Callable
+from datetime import timedelta
+from typing import Any
 
-import httpx  # noqa: E402
-import pytest  # noqa: E402
-from langchain_core.embeddings import DeterministicFakeEmbedding  # noqa: E402
-from qdrant_client import AsyncQdrantClient  # noqa: E402
-from sqlalchemy.ext.asyncio import (  # noqa: E402
+import httpx
+import pytest
+from langchain_core.embeddings import DeterministicFakeEmbedding
+from qdrant_client import AsyncQdrantClient
+from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import StaticPool  # noqa: E402
+from sqlalchemy.pool import StaticPool
 
-import langgraph_chatbot.models  # noqa: E402,F401  (registers all tables on Base)
-from langgraph_chatbot.auth.security import (  # noqa: E402
+import langgraph_chatbot.models  # noqa: F401  (registers all tables on Base)
+from langgraph_chatbot.auth.security import (
     create_access_token,
     get_password_hash,
 )
-from langgraph_chatbot.chat.repositories.messages_store import (  # noqa: E402
+from langgraph_chatbot.chat.repositories.messages_store import (
     MessagesStore,
 )
-from langgraph_chatbot.config import Settings  # noqa: E402
-from langgraph_chatbot.db import Base  # noqa: E402
-from langgraph_chatbot.models.chat import Chat  # noqa: E402
-from langgraph_chatbot.models.user import User  # noqa: E402
-from tests.helpers import (  # noqa: E402
+from langgraph_chatbot.config import Settings
+from langgraph_chatbot.db import Base
+from langgraph_chatbot.models.chat import Chat
+from langgraph_chatbot.models.user import User
+from tests.helpers import (
     DEFAULT_PASSWORD,
     FakeGraph,
     FakeUserMemory,
@@ -60,6 +60,7 @@ _OPTIONAL_SECRET_VARS = (
     "FIRECRAWL_API_KEY",
     "ELEVEN_API_KEY",
 )
+
 
 # ------------------------------------------------------------------------ settings
 @pytest.fixture
@@ -78,6 +79,7 @@ def settings(monkeypatch) -> Settings:
         eleven_voice_id="test-voice",
     )
 
+
 # ------------------------------------------------------------------------ database
 @pytest.fixture
 async def engine():
@@ -93,14 +95,17 @@ async def engine():
     yield engine
     await engine.dispose()
 
+
 @pytest.fixture
 def sessionmaker(engine) -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(bind=engine, expire_on_commit=False)
+
 
 @pytest.fixture
 async def session(sessionmaker) -> AsyncIterator[AsyncSession]:
     async with sessionmaker() as session:
         yield session
+
 
 @pytest.fixture
 def user_factory(sessionmaker) -> Callable[..., Any]:
@@ -121,6 +126,7 @@ def user_factory(sessionmaker) -> Callable[..., Any]:
 
     return _create
 
+
 @pytest.fixture
 def chat_factory(sessionmaker) -> Callable[..., Any]:
     async def _create(user: User, title: str = "Test chat", **kwargs) -> Chat:
@@ -131,6 +137,7 @@ def chat_factory(sessionmaker) -> Callable[..., Any]:
         return chat
 
     return _create
+
 
 @pytest.fixture
 def make_token(settings) -> Callable[..., str]:
@@ -144,9 +151,11 @@ def make_token(settings) -> Callable[..., str]:
 
     return _make
 
+
 @pytest.fixture
 def auth_headers(make_token) -> Callable[[User], dict[str, str]]:
     return lambda user: {"Authorization": f"Bearer {make_token(user.id)}"}
+
 
 # --------------------------------------------------------------- vector store
 @pytest.fixture
@@ -155,9 +164,11 @@ async def qdrant() -> AsyncIterator[AsyncQdrantClient]:
     yield client
     await client.close()
 
+
 @pytest.fixture
 def embeddings() -> DeterministicFakeEmbedding:
     return DeterministicFakeEmbedding(size=768)
+
 
 @pytest.fixture
 async def messages_store(qdrant, embeddings) -> MessagesStore:
@@ -165,18 +176,22 @@ async def messages_store(qdrant, embeddings) -> MessagesStore:
     await store.ensure_collection()
     return store
 
+
 # ---------------------------------------------------------------- test doubles
 @pytest.fixture
 def scripted_llm() -> Callable[..., ScriptedChatModel]:
     return lambda *responses: ScriptedChatModel(responses=list(responses))
 
+
 @pytest.fixture
 def user_memory() -> FakeUserMemory:
     return FakeUserMemory()
 
+
 @pytest.fixture
 def fake_graph() -> FakeGraph:
     return FakeGraph()
+
 
 # ------------------------------------------------------------------ FastAPI app
 @pytest.fixture
@@ -193,6 +208,7 @@ def app(settings, sessionmaker, messages_store, fake_graph):
     app.dependency_overrides.clear()
     for attr in ("sessionmaker", "graph", "messages_store"):
         delattr(app.state, attr)
+
 
 @pytest.fixture
 async def client(app) -> AsyncIterator[httpx.AsyncClient]:

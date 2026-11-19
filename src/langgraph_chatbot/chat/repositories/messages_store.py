@@ -14,7 +14,6 @@ from qdrant_client.models import (
 
 from langgraph_chatbot.chat.vector_models.stored_message import StoredMessage
 
-
 # fixed namespace for deterministic point ids (any constant UUID works, it must not change)
 _POINT_NAMESPACE = UUID("6f1c3b7e-5a2d-4c8e-9b41-2d7a0e5f8c13")
 
@@ -88,9 +87,7 @@ class MessagesStore:
 
         await self._client.upsert(self._collection, points=[point])
 
-    async def recent(
-        self, *, user_id: UUID, chat_id: UUID, limit: int = 20
-    ) -> list[StoredMessage]:
+    async def recent(self, *, user_id: UUID, chat_id: UUID, limit: int = 20) -> list[StoredMessage]:
         points, _ = await self._client.scroll(
             collection_name=self._collection,
             scroll_filter=models.Filter(
@@ -114,16 +111,10 @@ class MessagesStore:
     @staticmethod
     def _tenant_filter(user_id: UUID, chat_id: UUID | None = None) -> models.Filter:
         """group_id is always required - the only place tenant isolation lives."""
-        must = [
-            models.FieldCondition(
-                key="group_id", match=models.MatchValue(value=str(user_id))
-            )
-        ]
+        must = [models.FieldCondition(key="group_id", match=models.MatchValue(value=str(user_id)))]
         if chat_id is not None:
             must.append(
-                models.FieldCondition(
-                    key="chat_id", match=models.MatchValue(value=str(chat_id))
-                )
+                models.FieldCondition(key="chat_id", match=models.MatchValue(value=str(chat_id)))
             )
         return models.Filter(must=must)
 
@@ -150,7 +141,5 @@ class MessagesStore:
     async def delete_chat(self, *, user_id: UUID, chat_id: UUID) -> None:
         await self._client.delete(
             collection_name=self._collection,
-            points_selector=models.FilterSelector(
-                filter=self._tenant_filter(user_id, chat_id)
-            ),
+            points_selector=models.FilterSelector(filter=self._tenant_filter(user_id, chat_id)),
         )

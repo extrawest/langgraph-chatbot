@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.staticfiles import StaticFiles
 
 from langgraph_chatbot.chat.deps import ChatServiceDep
 from langgraph_chatbot.deps import CurrentUser, SettingsDep

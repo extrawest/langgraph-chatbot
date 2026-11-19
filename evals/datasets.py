@@ -176,7 +176,10 @@ VOICE = [
 SUITES: dict[str, Suite] = {
     "tools": Suite(
         dataset="chatbot-tool-routing",
-        description="Does the agent search only when it should, and read a given URL instead of searching for it?",
+        description=(
+            "Does the agent search only when it should, "
+            "and read a given URL instead of searching for it?"
+        ),
         examples=TOOL_ROUTING,
         evaluators=[
             ev.expected_tools,

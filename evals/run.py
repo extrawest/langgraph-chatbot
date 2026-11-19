@@ -30,9 +30,7 @@ def _upload(client: Client, suite: Suite, *, sync: bool) -> None:
     reused and experiments stay comparable.
     """
     if not client.has_dataset(dataset_name=suite.dataset):
-        dataset = client.create_dataset(
-            dataset_name=suite.dataset, description=suite.description
-        )
+        dataset = client.create_dataset(dataset_name=suite.dataset, description=suite.description)
     else:
         dataset = client.read_dataset(dataset_name=suite.dataset)
         existing = [e.id for e in client.list_examples(dataset_id=dataset.id)]

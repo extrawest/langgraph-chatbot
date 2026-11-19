@@ -46,7 +46,14 @@ def test_voice_token_uses_a_fresh_room_each_time(settings):
 
 # ------------------------------------------------------------- SpokenOnly
 async def test_spoken_only_keeps_agent_tokens_and_forwards_args():
-    graph = FakeGraph([("hello", "agent"), ("<tool page>", "agent_tools"), ("<trimmed>", "trim_tool_output"), ("bye", "agent")])
+    graph = FakeGraph(
+        [
+            ("hello", "agent"),
+            ("<tool page>", "agent_tools"),
+            ("<trimmed>", "trim_tool_output"),
+            ("bye", "agent"),
+        ]
+    )
 
     out = [t async for t, _ in SpokenOnly(graph).astream({"messages": []}, stream_mode="messages")]
 
@@ -99,7 +106,9 @@ async def test_entrypoint_requires_chat_id(voice_agent, monkeypatch):
 
 
 async def test_entrypoint_runtime_failure_shuts_down(voice_agent, monkeypatch, caplog):
-    monkeypatch.setattr(voice_agent, "build_runtime", AsyncMock(side_effect=RuntimeError("qdrant down")))
+    monkeypatch.setattr(
+        voice_agent, "build_runtime", AsyncMock(side_effect=RuntimeError("qdrant down"))
+    )
     ctx = job_context(attributes={"chat_id": "chat-1"})
 
     await voice_agent.entrypoint(ctx)
@@ -129,7 +138,9 @@ async def test_entrypoint_starts_session_with_voice_context(voice_agent, monkeyp
     build.assert_awaited_once_with(settings, ensure_collection=False)
     adapter_kwargs = adapter.call_args.kwargs
     assert isinstance(adapter_kwargs["graph"], SpokenOnly)
-    assert adapter_kwargs["context"] == ContextSchema(user_id="user-1", chat_id="chat-1", mode=Mode.VOICE)
+    assert adapter_kwargs["context"] == ContextSchema(
+        user_id="user-1", chat_id="chat-1", mode=Mode.VOICE
+    )
     assert tts.call_args.kwargs["voice_id"] == settings.eleven_voice_id
     ctx.add_shutdown_callback.assert_called_once_with(runtime.aclose)
     session.start.assert_awaited_once()

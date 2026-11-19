@@ -46,9 +46,7 @@ class AppRuntime:
         await self.stack.aclose()
 
 
-async def _load_tools(
-    stack: AsyncExitStack, name: str, target, allowed: set[str]
-) -> list:
+async def _load_tools(stack: AsyncExitStack, name: str, target, allowed: set[str]) -> list:
     """Connect one MCP server and return its tools; [] if it is unavailable.
 
     An MCP server being down must not take the chat (or a voice call) down with it.
@@ -58,17 +56,13 @@ async def _load_tools(
         adapter = await stack.enter_async_context(MCPAdapter(target))
         tools = [t for t in await adapter.list_tools() if t.name in allowed]
     except Exception as exc:
-        logger.warning(
-            "%s MCP unavailable (%s), continuing without it", name, type(exc).__name__
-        )
+        logger.warning("%s MCP unavailable (%s), continuing without it", name, type(exc).__name__)
         return []
     logger.info("%s MCP tools: %s", name, [t.name for t in tools])
     return tools
 
 
-async def build_runtime(
-    settings: Settings, *, ensure_collection: bool = True
-) -> AppRuntime:
+async def build_runtime(settings: Settings, *, ensure_collection: bool = True) -> AppRuntime:
     llm = build_llm(settings)
 
     # Every resource goes into the stack right after it is created. If anything below

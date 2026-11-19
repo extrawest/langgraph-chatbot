@@ -1,8 +1,8 @@
 """ChatRepository + ChatService (non-streaming parts) against SQLite + in-memory Qdrant."""
 
 import uuid
-from unittest.mock import AsyncMock
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -108,9 +108,13 @@ async def test_rename_someone_elses_chat(service, chat_factory, alice, bob):
     assert (await service.get_chat(chat.id, alice.id)).title == "mine"
 
 
-async def test_delete_chat_removes_row_and_messages(service, messages_store, sessionmaker, chat_factory, alice):
+async def test_delete_chat_removes_row_and_messages(
+    service, messages_store, sessionmaker, chat_factory, alice
+):
     chat = await chat_factory(alice)
-    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi")
+    await messages_store.add(
+        user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi"
+    )
 
     assert await service.delete_chat(chat.id, alice.id) is True
 
@@ -119,9 +123,13 @@ async def test_delete_chat_removes_row_and_messages(service, messages_store, ses
     assert await messages_store.recent(user_id=alice.id, chat_id=chat.id) == []
 
 
-async def test_delete_someone_elses_chat_touches_nothing(service, messages_store, chat_factory, alice, bob):
+async def test_delete_someone_elses_chat_touches_nothing(
+    service, messages_store, chat_factory, alice, bob
+):
     chat = await chat_factory(alice)
-    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi")
+    await messages_store.add(
+        user_id=alice.id, chat_id=chat.id, turn_id="t", role="user", content="hi"
+    )
 
     assert await service.delete_chat(chat.id, bob.id) is False
 
@@ -129,7 +137,9 @@ async def test_delete_someone_elses_chat_touches_nothing(service, messages_store
     assert len(await messages_store.recent(user_id=alice.id, chat_id=chat.id)) == 1
 
 
-async def test_delete_chat_qdrant_failure_still_removes_the_chat(session, repo, fake_graph, chat_factory, alice):
+async def test_delete_chat_qdrant_failure_still_removes_the_chat(
+    session, repo, fake_graph, chat_factory, alice
+):
     store = AsyncMock()
     store.delete_chat.side_effect = ConnectionError("qdrant down")
     service = ChatService(session, repo, fake_graph, store)
@@ -144,16 +154,24 @@ async def test_delete_chat_qdrant_failure_still_removes_the_chat(session, repo, 
 
 async def test_get_messages_from_store(service, messages_store, chat_factory, alice):
     chat = await chat_factory(alice)
-    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t1", role="user", content="hi")
-    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t1", role="assistant", content="hello")
+    await messages_store.add(
+        user_id=alice.id, chat_id=chat.id, turn_id="t1", role="user", content="hi"
+    )
+    await messages_store.add(
+        user_id=alice.id, chat_id=chat.id, turn_id="t1", role="assistant", content="hello"
+    )
 
     messages = await service.get_messages(chat.id, alice.id)
 
     assert [(m.role, m.content) for m in messages] == [("user", "hi"), ("assistant", "hello")]
 
 
-async def test_get_messages_of_someone_elses_chat(service, messages_store, chat_factory, alice, bob):
+async def test_get_messages_of_someone_elses_chat(
+    service, messages_store, chat_factory, alice, bob
+):
     chat = await chat_factory(alice)
-    await messages_store.add(user_id=alice.id, chat_id=chat.id, turn_id="t1", role="user", content="secret")
+    await messages_store.add(
+        user_id=alice.id, chat_id=chat.id, turn_id="t1", role="user", content="secret"
+    )
 
     assert await service.get_messages(chat.id, bob.id) is None
