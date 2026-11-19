@@ -50,7 +50,7 @@ async def get_current_user(
         )
         user_id = UUID(payload["sub"])
     except InvalidTokenError, KeyError, ValueError:
-        raise credentials_exception
+        raise credentials_exception from None
 
     user = await user_repo.get_by_id(user_id)
     if user is None or not user.is_active:

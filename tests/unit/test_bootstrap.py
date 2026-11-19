@@ -1,5 +1,6 @@
 from contextlib import AsyncExitStack
 from types import SimpleNamespace
+from typing import ClassVar
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,13 +15,13 @@ from langgraph_chatbot.ai.bootstrap import (
     _load_tools,
     build_runtime,
 )
-from tests.helpers import FakeUserMemory, ScriptedChatModel
+from tests.helpers import FakeUserMemory
 
 
 class FakeAdapter:
     """Async context manager like langchain's MCPAdapter."""
 
-    instances: list["FakeAdapter"] = []
+    instances: ClassVar[list[FakeAdapter]] = []
 
     def __init__(self, target, tool_names=(), fail: Exception | None = None):
         self.target = target
@@ -49,7 +50,9 @@ def _reset_adapters():
 # -------------------------------------------------------------- _load_tools
 async def test_load_tools_keeps_only_allowed_tools(monkeypatch):
     monkeypatch.setattr(
-        bootstrap, "MCPAdapter", lambda target: FakeAdapter(target, ["tavily_search", "tavily_crawl"])
+        bootstrap,
+        "MCPAdapter",
+        lambda target: FakeAdapter(target, ["tavily_search", "tavily_crawl"]),
     )
     async with AsyncExitStack() as stack:
         tools = await _load_tools(stack, "Tavily", "https://mcp", TAVILY_TOOLS)
@@ -111,7 +114,12 @@ async def test_build_runtime_wires_everything(settings, patched):
         assert await patched.qdrant.collection_exists("messages")
         patched.load_tools.assert_not_awaited()  # no MCP keys configured
         llm, store, memory, tools = patched.build_graph.call_args.args
-        assert (llm, store, memory, tools) == (patched.llm, runtime.messages_store, patched.memory, [])
+        assert (llm, store, memory, tools) == (
+            patched.llm,
+            runtime.messages_store,
+            patched.memory,
+            [],
+        )
     finally:
         await runtime.aclose()
 

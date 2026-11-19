@@ -61,4 +61,4 @@ async def register(
         raise HTTPException(
             status_code=409,
             detail="Email already registered",
-        )
+        ) from None

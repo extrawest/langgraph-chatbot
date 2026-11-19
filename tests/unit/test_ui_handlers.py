@@ -163,7 +163,7 @@ def test_begin_rename_prefills_title(h):
 
 
 def test_begin_delete_escapes_title(h):
-    target, panel, label, box = h.begin_edit("delete", "c2", CHATS)
+    target, _panel, label, box = h.begin_edit("delete", "c2", CHATS)
 
     assert target == {"mode": "delete", "id": "c2"}
     assert label.value == "**Delete “&lt;b&gt;Second&lt;/b&gt;”?**"
@@ -189,9 +189,7 @@ async def test_confirm_edit_without_target(h, api):
 async def test_confirm_rename(h, api):
     hist = {"c1": ["m"]}
 
-    result = await h.confirm_edit(
-        "tok", {"mode": "rename", "id": "c1"}, "  New name ", "c1", hist
-    )
+    result = await h.confirm_edit("tok", {"mode": "rename", "id": "c1"}, "  New name ", "c1", hist)
 
     api.rename_chat.assert_awaited_once_with("tok", "c1", "New name")
     chats, current, chatbot, histories, target, panel = result
@@ -206,9 +204,7 @@ async def test_confirm_rename(h, api):
 
 
 async def test_confirm_rename_rejects_blank_title(h, api, warnings):
-    result = await h.confirm_edit(
-        "tok", {"mode": "rename", "id": "c1"}, "   ", None, {}
-    )
+    result = await h.confirm_edit("tok", {"mode": "rename", "id": "c1"}, "   ", None, {})
 
     assert result == noops(SIDEBAR_SIZE + 3)  # panel stays open
     assert warnings == ["Enter a non-empty title"]
@@ -240,9 +236,7 @@ async def test_confirm_delete_of_open_chat_clears_selection(h, api):
 async def test_confirm_delete_of_other_chat_keeps_open_one(h, api):
     api.list_chats.return_value = [CHATS[1]]
 
-    result = await h.confirm_edit(
-        "tok", {"mode": "delete", "id": "c1"}, "", "c2", {"c2": ["b"]}
-    )
+    result = await h.confirm_edit("tok", {"mode": "delete", "id": "c1"}, "", "c2", {"c2": ["b"]})
 
     assert result[:3] == ([CHATS[1]], "c2", ["b"])
 

@@ -4,12 +4,12 @@ import logging.config
 import os
 from contextvars import ContextVar
 
-log_context: ContextVar[dict] = ContextVar("log_context", default={})
+log_context: ContextVar[dict | None] = ContextVar("log_context", default=None)
 
 
 class ContextFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        for key, value in log_context.get().items():
+        for key, value in (log_context.get() or {}).items():
             setattr(record, key, value)
         return True
 
@@ -22,7 +22,7 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for key in log_context.get():
+        for key in log_context.get() or {}:
             if hasattr(record, key):
                 data[key] = getattr(record, key)
         if record.exc_info:

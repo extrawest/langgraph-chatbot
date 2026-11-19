@@ -40,7 +40,7 @@ async def test_missing_user(repo):
 async def test_duplicate_email(repo, user_factory):
     await user_factory(email="dup@example.com")
 
-    with pytest.raises(EmailAlreadyExists, match="dup@example.com"):
+    with pytest.raises(EmailAlreadyExists, match=r"dup@example\.com"):
         await repo.add(User(email="dup@example.com", hashed_password="h"))
 
 
