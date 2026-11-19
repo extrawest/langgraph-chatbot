@@ -69,7 +69,14 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.DEPLOY_USER }}
         run: |
+          # A missing secret is an empty string here, and the first command to notice
+          # would fail with a bare exit 1. Say which one is missing instead.
+          : "${HOST:?the DEPLOY_HOST secret is not set}"
+          : "${USER_NAME:?the DEPLOY_USER secret is not set}"
+          : "${SSH_KEY:?the DEPLOY_SSH_KEY secret is not set}"
+
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
