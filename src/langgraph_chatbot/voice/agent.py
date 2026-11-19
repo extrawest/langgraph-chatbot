@@ -33,7 +33,9 @@ class Assistant(Agent):
         super().__init__(instructions="")
 
 
-server = AgentServer()
+# dev mode keeps 0 idle processes, so the first call pays for the process spawn, the
+# imports and the prewarm itself; one warm process moves all of that before the call
+server = AgentServer(num_idle_processes=1)
 
 
 def prewarm(proc: JobProcess):
