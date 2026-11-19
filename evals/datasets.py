@@ -163,13 +163,15 @@ ISOLATION = [
 ]
 
 # ------------------------------------------------------------------ voice filter
-# SpokenOnly must hand TTS the agent's words and nothing else. Each question is
-# one that forces a tool call - otherwise there would be no tool text to leak.
+# SpokenOnly must hand TTS the agent's words and nothing else. Every question here
+# needs data the model cannot have, so a search runs and there is tool output that
+# could leak. expected_tools is scored too: if it drops, these examples stopped
+# exercising the filter and only_agent_spoken is passing on nothing.
 
 VOICE = [
-    _ask("What is the latest stable release of Python?"),
-    _ask("Who is the current president of France?"),
-    _ask("What is the current USD to EUR exchange rate?"),
+    _ask("What is the current USD to EUR exchange rate?", tools_any=["tavily_search"]),
+    _ask("What did Anthropic announce most recently?", tools_any=["tavily_search"]),
+    _ask("What is the weather in Kyiv right now?", tools_any=["tavily_search"]),
 ]
 
 
@@ -203,7 +205,7 @@ SUITES: dict[str, Suite] = {
         dataset="chatbot-voice-filter",
         description="SpokenOnly: only agent tokens may reach TTS, never tool output.",
         examples=VOICE,
-        evaluators=[ev.only_agent_spoken],
+        evaluators=[ev.only_agent_spoken, ev.expected_tools],
         voice=True,
     ),
 }

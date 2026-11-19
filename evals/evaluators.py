@@ -57,10 +57,10 @@ def recalls(outputs: dict, reference_outputs: dict) -> bool:
 def only_agent_spoken(outputs: dict) -> bool:
     """SpokenOnly: TTS must receive agent tokens and nothing else.
 
-    Requires a tool to have actually been called, otherwise the example proves
-    nothing - a question answered without tools has no tool output to leak.
+    Vacuously true when no tool ran - there was no tool output to leak. The
+    expected_tools metric on the same suite is what shows that happened.
     """
-    return bool(outputs.get("tools")) and set(outputs.get("nodes") or []) == {"agent"}
+    return set(outputs.get("nodes") or []) == {"agent"}
 
 
 # ------------------------------------------------------------------ llm judges
