@@ -16,10 +16,14 @@ x-logging: &logging
     max-file: "3"
 
 # Shared by api / ui / worker: same build, same image, one tag between them.
+# The image is built by the release workflow and pulled here; `build` stays so a
+# local `up -d --build` still works. APP_VERSION is written into .env by the deploy,
+# so the host keeps serving the release it was given even if someone later runs
+# `up -d` by hand.
 x-app: &app
   build:
     context: .
-  image: langgraph-chatbot:latest
+  image: ghcr.io/extrawest/langgraph-chatbot:${APP_VERSION:-latest}
   env_file: .env
   restart: unless-stopped
   logging: *logging

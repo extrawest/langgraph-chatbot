@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # the release workflow runs this same suite before it ships a tag
+  workflow_call:
 
 # A new push to the same branch cancels the run still going for the old one.
 concurrency:

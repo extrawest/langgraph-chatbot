@@ -222,6 +222,31 @@ docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
 Caddy obtains and renews the TLS certificate on its own — point an A record at the host
 **before** the first start, otherwise the ACME challenge fails.
 
+### Releases
+
+After that first bootstrap, deployment is driven by tags rather than by pushes to
+`main`: `main` stays continuously green, and shipping is a decision someone makes by
+naming a version.
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+`.github/workflows/release.yml` then runs the test suite, builds the image and pushes
+it to `ghcr.io/extrawest/langgraph-chatbot:v1.2.0`, opens a GitHub Release with
+generated notes, and connects to the host over SSH to check that tag out (the compose
+file and the Caddyfile ship with the code), pull the image and restart the stack. The
+image is built on the runner, not on the 1 vCPU VPS that is serving traffic.
+
+The tag is baked in as `APP_VERSION` and `/health` reports it, so the last deploy step
+polls the running container until it answers with the released version — a deploy that
+silently did nothing fails the workflow. Rolling back is pushing an earlier tag.
+
+Repository secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` (a deploy key whose
+public half is in the host's `authorized_keys`). The GHCR package has to be public, or
+the host needs `docker login ghcr.io` once with a `read:packages` token.
+
 Measured footprint on a 2 GB / 1 vCPU VPS (idle):
 
 | Container | Memory |

@@ -1,0 +1,118 @@
+name: release
+
+# A release is a tag, not a push to main: main is continuously green, but shipping
+# is a decision someone makes by naming a version.
+on:
+  push:
+    tags: ["v*"]
+
+# One release at a time, and never cancel one in the middle of a deploy.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the GitHub Release
+  packages: write # push the image to GHCR
+
+jobs:
+  # The same suite that guards main. A tag must not ship what main would not accept.
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  image:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Built here rather than on the VPS: that host has 1 vCPU, 2 GB of RAM and is
+      # serving traffic while this runs. The cache lives in Actions, so a release
+      # that only changes src/ reuses the whole dependency layer.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: APP_VERSION=${{ github.ref_name }}
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      # Notes are generated from the commits since the previous tag.
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.ref_name }}
+      # Where the clone lives on the host, relative to the deploy user's home.
+      APP_DIR: langgraph-chatbot
+    steps:
+      - name: Add the deploy key
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Trust on first use: the runner is a fresh VM, so there is no stored host
+          # key to compare against. Pin DEPLOY_HOST's key as a secret to do better.
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Pull the released image and restart the stack
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_NAME: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 "$USER_NAME@$HOST" bash -se <<EOF
+          set -euo pipefail
+          cd "\$HOME/$APP_DIR"
+
+          # The tag decides the compose file and the Caddyfile as well, not just the
+          # image: config and code ship together or they drift apart.
+          git fetch --tags --prune --force
+          git checkout --force "$TAG"
+
+          if grep -q '^APP_VERSION=' .env; then
+            sed -i "s|^APP_VERSION=.*|APP_VERSION=$TAG|" .env
+          else
+            echo "APP_VERSION=$TAG" >> .env
+          fi
+
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d
+          # Idempotent: on an unchanged schema this does nothing.
+          docker compose -f docker-compose.prod.yml run --rm api alembic upgrade head
+          # Every release leaves the previous image untagged; the disk is 2 GB.
+          docker image prune -f
+
+          # up -d returns before the healthcheck passes, so poll. This is the step
+          # that makes the release real: the running api has to report this tag.
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if docker compose -f docker-compose.prod.yml exec -T api python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())" | grep -q "$TAG"; then
+              echo "api is serving $TAG"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "the api never reported $TAG" >&2
+          exit 1
+          EOF
