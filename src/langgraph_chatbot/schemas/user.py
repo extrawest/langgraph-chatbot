@@ -11,19 +11,19 @@ class UserCreate(BaseModel):
     model_config = ConfigDict(regex_engine="python-re")
 
     email: EmailStr
-    password: str = Field(
-        min_length=8,
-        max_length=20,
-    )
+    password: str
     confirm_password: str
 
     @model_validator(mode="after")
-    def check_password_match(self) -> Self:
+    def validate_password(self) -> Self:
+        if len(self.password) < 8 or len(self.password) > 20:
+            raise ValueError("Password must contain 8-20 characters")
+
+        if not bool(re.fullmatch(r"^(?=.*\d)(?=.*[^a-zA-Z0-9\s]).+$", self.password)):
+            raise ValueError("Password must contain at least 1 digit, and 1 symbol")
+
         if self.password != self.confirm_password:
             raise ValueError("Passwords do not match")
-
-        if bool(re.fullmatch(r"[A-Z]{2}-\d{3}", self.password)):
-            raise ValueError("Password must contain at least 1 digit, and 1 symbol")
         return self
 
 
