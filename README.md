@@ -4,7 +4,7 @@
 [![Maintainer](https://img.shields.io/static/v1?label=Roman%20Ovsepian&message=Maintainer&color=red)](mailto:roman.ovsepian@extrawest.com)
 [![Ask Me Anything !](https://img.shields.io/badge/Ask%20me-anything-1abc9c.svg)]()
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-![GitHub release](https://img.shields.io/badge/release-v1.0.0-blue)
+[![GitHub release](https://img.shields.io/github/v/release/extrawest/langgraph-chatbot)](https://github.com/extrawest/langgraph-chatbot/releases)
 
 A multi-tenant ChatGPT-like assistant built on **LangGraph**. Every user gets isolated
 chats whose full history lives in a vector store, long-term facts that carry across
@@ -385,6 +385,13 @@ src/langgraph_chatbot/
 ├── logger.py        JSON logging with contextvar-based request context
 └── main.py          FastAPI app, lifespan, routers
 ```
+
+## License
+
+Licensed under the Apache License, Version 2.0 — the full text is in
+[LICENSE](LICENSE). It allows use, modification and redistribution, including
+commercially, provided the notice is kept and changes are stated, and it grants a
+patent licence from the contributors along with the copyright one.
 
 ## Contributing
 

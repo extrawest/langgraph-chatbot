@@ -6,6 +6,8 @@ authors = [
     {name = "roman-ovsepian-ew",email = "roman.ovsepian@extrawest.com"}
 ]
 readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "fastapi (>=0.146.0,<0.147.0)",
